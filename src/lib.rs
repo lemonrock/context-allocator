@@ -38,4 +38,5 @@ use ::std::ptr::null_mut;
 
 include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
+include!("BumpAllocator.rs");
 include!("LayoutHack.rs");
