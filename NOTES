@@ -1,0 +1,74 @@
+We want a:-
+		- single-threaded allocator
+		- probably SLAB-based
+		- ?we do not want to support object sizes over page size (4Kb)?
+		- to be able to re-use a mmap'd or similar piece of memory which is NUMA LOCAL
+			- see libnuma for how to do this.
+
+	- elfmalloc provides a slab-allocator
+
+Or
+	- we can use a simple never-freeing allocator
+		- resize-in-place becomes very inefficient
+
+
+Allocator choices:-
+	- Redox's allocator
+		https://crates.io/crates/ralloc
+	- Bump allocators (never free)
+		- build-our-own, never-freeing: suffers from severe inefficiences with realloc which increases size
+		- https://crates.io/crates/bump_alloc
+		- https://crates.io/crates/bh_alloc
+		- https://crates.io/crates/scratchpad
+		- https://crates.io/crates/obstack
+		- https://crates.io/crates/jenga
+	- Use elfmalloc's bsalloc: https://github.com/ezrosent/allocators-rs/tree/master/bsalloc
+	- Linked list allocator
+		eg https://crates.io/crates/linked_list_allocator
+			- scans list of free blocks to find first block large enough (O(n))
+			- severe inefficiences with realloc which increases size
+		eg https://rphmeier.github.io/allocators/allocators/index.html
+	- Buddy allocators
+		https://crates.io/crates/buddy_system_allocator
+		https://crates.io/crates/alloc_buddy_simple2
+	- ?https://github.com/dropbox/rust-alloc-no-stdlib/blob/master/src/stack_allocator.rs
+	- https://docs.rs/alloc-cortex-m/0.3.5/alloc_cortex_m/ - hmmm??
+	- ?https://crates.io/crates/xalloc? not appropriate?
+	- Use a slab allocator
+		- https://crates.io/crates/simple-slab - no use - assumes a fixed size object.
+		- Use elfmalloc's slab: https://github.com/ezrosent/allocators-rs/tree/master/slab-alloc
+		- https://crates.io/crates/slab_allocator (seems to re-use the inefficient linked-list-allocator above)
+		- Re-implement that from Linux
+	- Try to implement slub
+	- Try to implement SLOB
+	- Use an allocator of memory pools
+		- create memory pools for 8b, 16b, 32b, etc up to, say 256b.
+		- have an oversize pool - how?
+		- use linked lists for the non-oversize pools
+		- on coroutine creation creator indicates how much in each pool.
+	- Rework our own toblerone allocator from persistent memory w/o multithreading problems
+	
+	- Rework third party
+		- eg can we have a thread-local tcmalloc? hoard?
+	
+	- Our own
+		- when a block is free'd, add it to the top of a free list
+		- merge blocks wherever possible
+		- can realloc in place for larger size if this was the last block allocated (and, if used a mirror ring buffer, could wrap-around a memory allocation)
+		- maintain multiple free lists but update other free lists if allocations 'hit' them.
+		- explore Linux's SLOB, which also works well for small memories.
+
+
+
+
+First, "slab" has become a generic name referring to a memory allocation strategy employing an object cache, enabling efficient allocation and deallocation of kernel objects. It was first documented by Sun engineer Jeff Bonwick1 and implemented in the Solaris 2.4 kernel.
+
+Linux currently offers three choices for its "slab" allocator:
+
+- Slab is the original, based on Bonwick's seminal paper and available since Linux kernel version 2.2. It is a faithful implementation of Bonwick's proposal, augmented by the multiprocessor changes described in Bonwick's follow-up paper2.
+
+- Slub is the next-generation replacement memory allocator, which has been the default in the Linux kernel since 2.6.23. It continues to employ the basic "slab" model, but fixes several deficiencies in Slab's design, particularly around systems with large numbers of processors. Slub is simpler than Slab.
+
+- SLOB (Simple List Of Blocks) is a memory allocator optimized for embedded systems with very little memory—on the order of megabytes. It applies a very simple first-fit algorithm on a list of blocks, not unlike the old K&R-style heap allocator. In eliminating nearly all of the overhad from the memory allocator, SLOB is a good fit for systems under extreme memory constraints, but it offers none of the benefits described in 1 and can suffer from pathological fragmentation.
+
+What should you use? Slub, unless you are building a kernel for an embedded device with limited in memory. In that case, I would benchmark Slub versus SLOB and see what works best for your workload. There is no reason to use Slab; it will likely be removed from future Linux kernel releases.
