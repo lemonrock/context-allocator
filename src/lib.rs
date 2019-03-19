@@ -40,3 +40,29 @@ include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
 include!("BumpAllocator.rs");
 include!("LayoutHack.rs");
+include!("NonNullExt.rs");
+
+
+// bitmap-based allocator.
+// Use a bitmap to identify free bytes; if we allocate in 16 byte chunks, 16 bytes can be represented as one bit (therefore a 16:1 ratio of memory is required).
+
+// allocations of more than one page - in theory, we can use mremap.
+
+//struct Bitmap
+//{
+//	pointer: NonZeroUsize,
+//	size_in_bytes: NonZeroUsize,
+//}
+//
+//impl Bitmap
+//{
+//	fn allocate(&mut self, from_pointer: NonZeroSize, size: NonZeroSize)
+//	{
+//
+//	}
+//}
+//
+//pub struct BitmapAllocator
+//{
+//	bitmap: Bitmap,
+//}
