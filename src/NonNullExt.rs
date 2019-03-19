@@ -2,7 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-trait NonNullExt: Sized + Copy
+trait NonNullExt: Sized + Copy + Ord + Debug
 {
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
@@ -27,6 +27,47 @@ trait NonNullExt: Sized + Copy
 		self.to_usize().checked_add(increment).map(Self::from_usize)
 	}
 
+	#[inline(always)]
+	fn add_assign(&mut self, increment: usize)
+	{
+		*self = (*self).add(increment)
+	}
+
+	#[inline(always)]
+	fn difference(self, other: Self) -> usize
+	{
+		debug_assert!(self >= other, "other `{:?}` is less than self `{:?}`", other, self);
+
+		self.to_usize() - other.to_usize()
+	}
+
+	#[inline(always)]
+	fn read<V: Copy>(&self) -> V
+	{
+		unsafe { (self.to_usize() as *const V).read() }
+	}
+
+	#[inline(always)]
+	fn write<V: Copy>(&mut self, value: V)
+	{
+		unsafe { (self.to_usize() as *mut V).write(value) }
+	}
+
+	#[inline(always)]
+	fn write_and_advance<V: Copy>(&mut self, value: V)
+	{
+		self.write(value);
+		self.add_assign(size_of::<V>())
+	}
+
+	#[inline(always)]
+	fn or_u8(self, bits_to_set: u8)
+	{
+		let pointer = self.to_usize() as *mut u8;
+		let current_value = unsafe { *pointer };
+		unsafe { *pointer = current_value | bits_to_set }
+	}
+
 	#[doc(hidden)]
 	fn to_usize(self) -> usize;
 
@@ -34,7 +75,7 @@ trait NonNullExt: Sized + Copy
 	fn from_usize(value: usize) -> Self;
 }
 
-impl<T> NonNullExt for NonNull<T>
+impl NonNullExt for NonNull<u8>
 {
 	#[inline(always)]
 	fn to_usize(self) -> usize
@@ -45,6 +86,6 @@ impl<T> NonNullExt for NonNull<T>
 	#[inline(always)]
 	fn from_usize(value: usize) -> Self
 	{
-		unsafe { NonNull::new_unchecked(value as *mut T) }
+		unsafe { NonNull::new_unchecked(value as *mut u8) }
 	}
 }
