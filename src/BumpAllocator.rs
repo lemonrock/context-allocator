@@ -14,9 +14,9 @@
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BumpAllocator
 {
-	most_recent_allocation_pointer: NonNull<u8>,
-	next_allocation_at_pointer: NonNull<u8>,
-	ends_at_pointer: NonNull<u8>,
+	most_recent_allocation_pointer: MemoryAddress,
+	next_allocation_at_pointer: MemoryAddress,
+	ends_at_pointer: MemoryAddress,
 }
 
 macro_rules! allocation_ends_at_pointer
@@ -25,7 +25,7 @@ macro_rules! allocation_ends_at_pointer
 	{
 		{
 			// NOTE: This evil code is used so that we can use an if hint of `unlikely!` rather than an unhinted `match` for `result`.
-			let allocation_ends_at_pointer: NonNull<u8> =
+			let allocation_ends_at_pointer: MemoryAddress =
 			{
 				let size = $non_zero_size.get();
 				let pointer: *mut u8 = unsafe { transmute($allocation_from.checked_add(size)) };
@@ -49,9 +49,10 @@ macro_rules! allocation_ends_at_pointer
 impl Allocator for BumpAllocator
 {
 	#[inline(always)]
-	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
+	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		debug_assert!(non_zero_power_of_two_alignment <= Self::MaximumPowerOfTwoAlignment, "non_zero_power_of_two_alignment `{}` exceeds `{}`", non_zero_power_of_two_alignment, Self::MaximumPowerOfTwoAlignment);
+
 		let next_allocation_at_rounded_up_pointer = self.next_allocation_at_pointer.round_up_to_power_of_two(non_zero_power_of_two_alignment);
 
 		self.most_recent_allocation_pointer = next_allocation_at_rounded_up_pointer;
@@ -61,7 +62,7 @@ impl Allocator for BumpAllocator
 	}
 
 	#[inline(always)]
-	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
+	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
 	{
 		if unlikely!(current_memory == self.most_recent_allocation_pointer)
 		{
@@ -70,7 +71,7 @@ impl Allocator for BumpAllocator
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
 		if unlikely!(current_memory == self.most_recent_allocation_pointer)
 		{
@@ -82,7 +83,7 @@ impl Allocator for BumpAllocator
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
 		if unlikely!(current_memory == self.most_recent_allocation_pointer)
 		{
@@ -113,7 +114,7 @@ impl BumpAllocator
 
 	/// New instance wrapping a block of memory.
 	#[inline(always)]
-	pub fn new(starts_at: NonNull<u8>, non_zero_size: NonZeroUsize) -> Self
+	pub fn new(starts_at: MemoryAddress, non_zero_size: NonZeroUsize) -> Self
 	{
 		Self
 		{

@@ -1,7 +1,7 @@
 We want a:-
 		- single-threaded allocator
 		- probably SLAB-based
-		- ?we do not want to support object sizes over page size (4Kb)?
+		- ?we do not want to extensions object sizes over page size (4Kb)?
 		- to be able to re-use a mmap'd or similar piece of memory which is NUMA LOCAL
 			- see libnuma for how to do this.
 

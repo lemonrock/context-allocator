@@ -6,25 +6,25 @@
 pub trait Allocator: Debug
 {
 	/// The sentinel value used for a zero-sized allocation.
-	const ZeroSizedAllocation: NonNull<u8> = unsafe { NonNull::new_unchecked(::std::usize::MAX as *mut u8) };
+	const ZeroSizedAllocation: MemoryAddress = non_null_pointer(::std::usize::MAX as *mut u8);
 
 	/// Allocate memory.
-	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>;
+	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>;
 
 	/// Deallocate (free) memory.
 	///
 	/// The parameter `memory` will never be the value `Self::ZeroSizedAllocation` and will always have been allocated by this `Allocator`.
-	fn deallocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>);
+	fn deallocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress);
 
 	/// Reallocate memory by growing it.
 	///
 	/// `non_zero_new_size` will always be greater than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>;
+	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>;
 
 	/// Reallocate memory by shrinking it.
 	///
 	/// `non_zero_new_size` will always be less than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>;
+	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>;
 }

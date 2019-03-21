@@ -114,7 +114,7 @@ unsafe impl<A: Allocator> GlobalAlloc for AllocatorAdaptor<A>
 unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 {
 	#[inline(always)]
-	unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr>
+	unsafe fn alloc(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		if unlikely!(layout.size_ == 0)
@@ -126,13 +126,13 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 	}
 
 	#[inline(always)]
-	unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr>
+	unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
 		self.allocate_zeroed(layout)
 	}
 
 	#[inline(always)]
-	unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout)
+	unsafe fn dealloc(&mut self, ptr: MemoryAddress, layout: Layout)
 	{
 		if unlikely!(ptr == A::ZeroSizedAllocation)
 		{
@@ -147,7 +147,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 	}
 
 	#[inline(always)]
-	unsafe fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<NonNull<u8>, AllocErr>
+	unsafe fn realloc(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		self.reallocate(ptr, layout, new_size)
 	}
@@ -179,7 +179,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 	}
 
 	#[inline(always)]
-	unsafe fn realloc_excess(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
+	unsafe fn realloc_excess(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
 	{
 		let result = self.reallocate(ptr, layout, new_size);
 
@@ -197,7 +197,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 	}
 
 	#[inline(always)]
-	unsafe fn grow_in_place(&mut self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn grow_in_place(&mut self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		let size_ = layout.size_;
@@ -206,7 +206,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
     }
 
 	#[inline(always)]
-	unsafe fn shrink_in_place(&mut self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn shrink_in_place(&mut self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		let size_ = layout.size_;
@@ -218,7 +218,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 impl<A: Allocator> AllocatorAdaptor<A>
 {
 	#[inline(always)]
-	fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocErr>
+	fn allocate_zeroed(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 
@@ -245,7 +245,7 @@ impl<A: Allocator> AllocatorAdaptor<A>
 	}
 
 	#[inline(always)]
-	fn reallocate(&self, current_memory: NonNull<u8>, layout: Layout, new_size: usize) -> Result<NonNull<u8>, AllocErr>
+	fn reallocate(&self, current_memory: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 

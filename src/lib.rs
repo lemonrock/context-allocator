@@ -19,6 +19,7 @@
 #[macro_use] extern crate likely;
 
 
+use self::extensions::*;
 use ::std::alloc::CannotReallocInPlace;
 use ::std::alloc::Layout;
 use ::std::alloc::GlobalAlloc;
@@ -26,398 +27,467 @@ use ::std::alloc::Alloc;
 use ::std::alloc::AllocErr;
 use ::std::alloc::Excess;
 use ::std::cell::UnsafeCell;
+use ::std::cmp::max;
 use ::std::cmp::Ordering;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::hash::Hasher;
 use ::std::mem::size_of;
 use ::std::mem::transmute;
+use ::std::num::NonZeroU32;
 use ::std::num::NonZeroUsize;
 use ::std::ptr::NonNull;
 use ::std::ptr::null_mut;
+use ::std::ptr::write;
 
 
 include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
+include!("Bitmap.rs");
 include!("BumpAllocator.rs");
-include!("LayoutHack.rs");
-include!("NonNullExt.rs");
+include!("MemoryAddress.rs");
 
 
-// bitmap-based allocator.
-// Use a bitmap to identify free bytes; if we allocate in 16 byte chunks, 16 bytes can be represented as one bit (therefore a 16:1 ratio of memory is required).
+pub(crate) mod extensions;
 
-// allocations of more than one page - in theory, we can use mremap.
 
-pub(crate) struct Bitmap
+/// Minimum allocation size is 8 bytes.
+#[derive(Debug)]
+pub struct LinkedListAllocator
 {
-	pointer: NonNull<u8>,
-	size_in_bytes: NonZeroUsize,
-	minimum_allocation_unit_power_of_two: NonZeroUsize,
-	shift_to_bit: usize,
+	// This is not a valid pointer if `first_free_block_non_null == end_of_all_blocks_non_null`.
+	first_free_block_non_null: NonNull<FreeBlock>,
+	end_of_all_blocks_non_null: NonNull<FreeBlock>,
 }
 
-impl Bitmap
+impl LinkedListAllocator
 {
+	/// Creates a new wrapper around the provided memory.
+	///
+	/// Uses 8-byte blocks; a minimum allocation is 8 bytes.
+	///
+	/// Panics with an assertion failure if `non_zero_memory_size` exceeds 4Gb (`:std::u32::MAX`).
 	#[inline(always)]
-	pub(crate) fn new(pointer: NonNull<u8>, size_in_bytes: NonZeroUsize, minimum_allocation_unit_power_of_two: NonZeroUsize) -> Self
+	pub fn new(memory_starts_at: MemoryAddress, non_zero_memory_size: NonZeroUsize) -> Self
 	{
+		const MaximumAddressableMemory: NonZeroUsize = NonZeroUsize::non_zero_unchecked(::std::u32::MAX as usize);
+		assert!(non_zero_memory_size <= MaximumAddressableMemory, "non_zero_memory_size `{}` exceeds MaximumAddressableMemory (`{}`)", non_zero_memory_size, MaximumAddressableMemory);
+
+		let first_free_block_non_null = memory_starts_at.cast::<FreeBlock>();
+
+		let end_of_all_blocks_non_null = unsafe
+		{
+			let first_free_block = first_free_block_non_null.as_mut();
+			let non_zero_memory_size_u32 = non_zero_memory_size.to_non_zero_u32();
+			write(&mut first_free_block.size_of_this_block, non_zero_memory_size_u32);
+			write(&mut first_free_block.offset_from_start_of_this_block_to_next_block, non_zero_memory_size_u32);
+			first_free_block.next_free_block_non_null()
+		};
+
 		Self
 		{
-			pointer,
-			size_in_bytes,
-			minimum_allocation_unit_power_of_two,
-			shift_to_bit: minimum_allocation_unit_power_of_two.get().trailing_zeros() as usize,
+			first_free_block_non_null,
+			end_of_all_blocks_non_null,
 		}
-	}
-
-	#[inline(always)]
-	pub(crate) fn get_bit_state(&self, bit_index: usize) -> bool
-	{
-		let bit_mask_within_byte = Self::bit_mask_within_byte(bit_index);
-
-		let byte = self.pointer_to_byte_at(bit_index).read::<u8>();
-		byte | bit_mask_within_byte != 0
-	}
-
-	#[inline(always)]
-	pub(crate) fn allocate(&mut self, allocations_start_from: NonNull<u8>, allocated_pointer: NonNull<u8>, size: NonZeroUsize)
-	{
-		#[cfg(debug_assertions)]
-		{
-			let minimum_allocation_unit_power_of_two = self.minimum_allocation_unit_power_of_two.get();
-
-			debug_assert_eq!(allocations_start_from.to_usize() % minimum_allocation_unit_power_of_two, 0, "allocations_start_from `{:?}` is not a multiple of self.minimum_allocation_unit `{:?}`", allocations_start_from, minimum_allocation_unit_power_of_two);
-
-			debug_assert_eq!(allocated_pointer.to_usize() % minimum_allocation_unit_power_of_two, 0, "allocated_pointer `{:?}` is not a multiple of self.minimum_allocation_unit `{:?}`", allocated_pointer, minimum_allocation_unit_power_of_two);
-
-			let ends_at_pointer = allocated_pointer.to_usize() + size.get();
-			debug_assert_eq!(ends_at_pointer % minimum_allocation_unit_power_of_two, 0, "ends_at_pointer `{:?}` is not a multiple of self.minimum_allocation_unit `{:?}`", ends_at_pointer, minimum_allocation_unit_power_of_two);
-		}
-
-		let starts_at_index_bytes = allocations_start_from.difference(allocations_start_from);
-
-		let starts_at_bit_index = self.shift_to_bit(starts_at_index_bytes);
-		let rounded_up_starts_at_bit_index = Self::round_up_to_power_of_64(starts_at_bit_index);
-
-		let ends_at_bit_index = self.shift_to_bit(starts_at_index_bytes + size.get());
-		let rounded_down_ends_at_bit_index = Self::round_down_to_power_of_64(ends_at_bit_index);
-
-		let mut current_index = self.pointer_to_byte_at(starts_at_bit_index);
-		Self::set_bits_at_start_that_are_unaligned(&mut current_index, rounded_up_starts_at_bit_index - starts_at_bit_index);
-		self.set_bits_in_middle_that_are_aligned(&mut current_index, rounded_down_ends_at_bit_index);
-		Self::set_bits_at_end_that_are_unaligned(&mut current_index, ends_at_bit_index - rounded_down_ends_at_bit_index);
-	}
-
-	#[inline(always)]
-	fn set_bits_at_start_that_are_unaligned(current_index: &mut NonNull<u8>, bits_to_set: usize)
-	{
-		#[inline(always)]
-		fn set_bits_and_advance(current_index: &mut NonNull<u8>, bits_to_set: usize, size_of_all_ones_writes: usize)
-		{
-			#[inline(always)]
-			const fn to_upper_bits_mask(bits_to_set: usize, size_of_all_ones_writes: usize) -> u8
-			{
-				let upper_bits = bits_to_set - size_of_all_ones_writes;
-
-				(((1 << upper_bits) - 1) as u8) << (8 - upper_bits)
-			}
-			current_index.or_u8(to_upper_bits_mask(bits_to_set, size_of_all_ones_writes));
-			current_index.add_assign(1)
-		}
-
-		match bits_to_set
-		{
-			0 =>
-			{
-				current_index.add_assign(size_of::<u64>())
-			}
-
-			1 ... 7 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u16>() + size_of::<u8>());
-				set_bits_and_advance(current_index, bits_to_set, 0)
-			}
-
-			8 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u16>() + size_of::<u8>());
-				current_index.write_and_advance(0xFFu8)
-			}
-
-			9 ... 15 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u16>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u8>());
-				current_index.write_and_advance(0xFFu8)
-			}
-
-			16 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u16>());
-				current_index.write_and_advance(0xFFFFu16)
-			}
-
-			17 ... 23 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u8>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u16>());
-				current_index.write_and_advance(0xFFFFu16)
-			}
-
-			24 =>
-			{
-				current_index.add_assign(size_of::<u32>() + size_of::<u8>());
-				current_index.write_and_advance(0xFFu8);
-				current_index.write_and_advance(0xFFFFu16)
-			}
-
-			25 ... 31 =>
-			{
-				current_index.add_assign(size_of::<u32>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u16>() + size_of::<u8>());
-				current_index.write_and_advance(0xFFu8);
-				current_index.write_and_advance(0xFFFFu16)
-			}
-
-			32 =>
-			{
-				current_index.add_assign(size_of::<u32>());
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			33 ... 39 =>
-			{
-				current_index.add_assign(size_of::<u16>() + size_of::<u8>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u32>());
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			40 =>
-			{
-				current_index.add_assign(size_of::<u16>() + size_of::<u8>());
-				current_index.write_and_advance(0xFFu8);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			41 ... 47 =>
-			{
-				current_index.add_assign(size_of::<u16>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u8>() + size_of::<u32>());
-				current_index.write_and_advance(0xFFu8);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			48 =>
-			{
-				current_index.add_assign(size_of::<u16>());
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			49 ... 55 =>
-			{
-				current_index.add_assign(size_of::<u8>());
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u16>() + size_of::<u32>());
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			56 =>
-			{
-				current_index.add_assign(size_of::<u8>());
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			57 ... 63 =>
-			{
-				set_bits_and_advance(current_index, bits_to_set, size_of::<u8>() + size_of::<u16>() + size_of::<u32>());
-				current_index.write_and_advance(0xFFu8);
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFFF_FFFFu32)
-			}
-
-			_ => unreachable!(),
-		}
-	}
-
-	#[inline(always)]
-	fn set_bits_in_middle_that_are_aligned(&self, current_index: &mut NonNull<u8>, rounded_down_ends_at_bit_index: usize)
-	{
-		debug_assert_eq!(rounded_down_ends_at_bit_index % Self::power_of_two, 0, "rounded_down_ends_at_bit_index `{}` is not a power of `{}`", rounded_down_ends_at_bit_index, Self::power_of_two);
-
-		let ends_at = self.pointer_to_byte_at(rounded_down_ends_at_bit_index);
-
-		while current_index != &ends_at
-		{
-			current_index.write_and_advance(0xFFFF_FFFF_FFFF_FFFFu64);
-		}
-	}
-
-	#[inline(always)]
-	fn set_bits_at_end_that_are_unaligned(current_index: &mut NonNull<u8>, bits_to_set: usize)
-	{
-		#[inline(always)]
-		fn set_bits(current_index: &mut NonNull<u8>, bits_to_set: usize, size_of_all_ones_writes: usize)
-		{
-			#[inline(always)]
-			const fn to_lower_bits_mask(bits_to_set: usize, size_of_all_ones_writes: usize) -> u8
-			{
-				let lower_bits = bits_to_set - size_of_all_ones_writes;
-
-				((1 << lower_bits) - 1) as u8
-			}
-
-			(*current_index).or_u8(to_lower_bits_mask(bits_to_set, size_of_all_ones_writes));
-		}
-
-		match bits_to_set
-		{
-			0 => (),
-
-			1 ... 7 =>
-			{
-				set_bits(current_index, bits_to_set, 0)
-			}
-
-			8 =>
-			{
-				current_index.write(0xFFu8);
-			}
-
-			9 ... 15 =>
-			{
-				current_index.write_and_advance(0xFFu8);
-				set_bits(current_index, bits_to_set, size_of::<u8>())
-			}
-
-			16 =>
-			{
-				current_index.write(0xFFFFu16);
-			}
-
-			17 ... 23 =>
-			{
-				current_index.write_and_advance(0xFFFFu16);
-				set_bits(current_index, bits_to_set, size_of::<u16>())
-			}
-
-			24 =>
-			{
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write(0xFFu8)
-			}
-
-			25 ... 31 =>
-			{
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFu8);
-				set_bits(current_index, bits_to_set, size_of::<u16>() + size_of::<u8>())
-			}
-
-			32 =>
-			{
-				current_index.write(0xFFFF_FFFFu32);
-			}
-
-			33 ... 39 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				set_bits(current_index, bits_to_set, size_of::<u32>())
-			}
-
-			40 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write(0xFFu8)
-			}
-
-			41 ... 47 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write_and_advance(0xFFu8);
-				set_bits(current_index, bits_to_set, size_of::<u32>() + size_of::<u8>())
-			}
-
-			48 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write(0xFFFFu16)
-			}
-
-			49 ... 55 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write_and_advance(0xFFFFu16);
-				set_bits(current_index, bits_to_set, size_of::<u32>() + size_of::<u16>())
-			}
-
-			56 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write(0xFFu8)
-			}
-
-			57 ... 63 =>
-			{
-				current_index.write_and_advance(0xFFFF_FFFFu32);
-				current_index.write_and_advance(0xFFFFu16);
-				current_index.write_and_advance(0xFFu8);
-				set_bits(current_index, bits_to_set, size_of::<u32>() + size_of::<u16>() + size_of::<u8>())
-			}
-
-			_ => unreachable!(),
-		}
-	}
-
-	const power_of_two: usize = 64;
-
-	const power_of_two_less_one: usize = Self::power_of_two - 1;
-
-	#[inline(always)]
-	const fn round_up_to_power_of_64(value: usize) -> usize
-	{
-		(value + Self::power_of_two_less_one) & !Self::power_of_two_less_one
-	}
-
-	#[inline(always)]
-	const fn round_down_to_power_of_64(value: usize) -> usize
-	{
-		value & !Self::power_of_two_less_one
-	}
-
-	const BitsInU8Mask: usize = 0b0111;
-
-	#[inline(always)]
-	const fn byte_index(bit_index: usize) -> usize
-	{
-		bit_index & !Self::BitsInU8Mask
-	}
-
-	#[inline(always)]
-	const fn bit_mask_within_byte(bit_index: usize) -> u8
-	{
-		(1 << (bit_index & Self::BitsInU8Mask)) as u8
-	}
-
-	#[inline(always)]
-	fn pointer_to_byte_at(&self, bit_index: usize) -> NonNull<u8>
-	{
-		let byte_index = Self::byte_index(bit_index);
-		self.pointer.add(byte_index)
-	}
-
-	#[inline(always)]
-	fn shift_to_bit(&self, index: usize) -> usize
-	{
-		index >> self.shift_to_bit
 	}
 }
 
-/// Bitmap allocator.
-pub struct BitmapAllocator
+impl Allocator for LinkedListAllocator
 {
-	bitmap: Bitmap,
+	#[inline(always)]
+	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
+	{
+		let end_of_all_blocks_non_null = self.end_of_all_blocks_non_null;
+
+		if unlikely!(non_zero_size > FreeBlock::MaximumAllocationSize)
+		{
+			return Err(AllocErr)
+		}
+
+		if unlikely!(non_zero_power_of_two_alignment > FreeBlock::MaximumAlignment)
+		{
+			return Err(AllocErr)
+		}
+
+		let floored_non_zero_size = FreeBlock::floor_size_to_minimum(non_zero_size);
+
+		let floored_non_zero_power_of_two_alignment = FreeBlock::floor_alignment_to_minimum(non_zero_power_of_two_alignment);
+
+		self.allocate_loop(floored_non_zero_size, floored_non_zero_power_of_two_alignment, end_of_all_blocks_non_null)
+	}
+
+	#[inline(always)]
+	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
+	{
+		unimplemented!()
+	}
+
+	#[inline(always)]
+	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	{
+		unimplemented!()
+	}
+
+	#[inline(always)]
+	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	{
+		unimplemented!()
+	}
+}
+
+impl LinkedListAllocator
+{
+	#[inline(always)]
+	fn allocate_loop(&mut self, floored_non_zero_size: NonZeroUsize, floored_non_zero_power_of_two_alignment: NonZeroUsize, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> Result<MemoryAddress, AllocErr>
+	{
+		#[inline(always)]
+		const fn allocation_will_never_fit_as_there_are_not_enough_blocks_remaining(floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> bool
+		{
+			let end_of_all_blocks_ends_at = end_of_all_blocks_non_null.cast::<u8>();
+			floored_allocation_must_end_at > end_of_all_blocks_ends_at
+		}
+
+		#[inline(always)]
+		fn allocation_fits(floored_allocation_must_end_at: MemoryAddress, free_block: &FreeBlock) -> bool
+		{
+			floored_allocation_must_end_at <= free_block.ends_at()
+		}
+
+		let mut previous_free_block_raw: *mut FreeBlock = null_mut();
+		let mut free_block_non_null = self.first_free_block_non_null;
+		while likely!(FreeBlock::more_free_blocks(free_block_non_null, end_of_all_blocks_non_null))
+		{
+			let free_block: &mut FreeBlock = free_block_non_null.mutable_reference();
+
+			// TODO: Currently not needed.
+			// free_block.coalesce(end_of_all_blocks_non_null);
+
+			let (floored_allocation_must_start_at, floored_allocation_must_end_at) = free_block.floored_allocation_must_start_at_and_end_at(floored_non_zero_size, floored_non_zero_power_of_two_alignment);
+
+			if unlikely!(allocation_will_never_fit_as_there_are_not_enough_blocks_remaining(floored_allocation_must_end_at, end_of_all_blocks_non_null))
+			{
+				return Err(AllocErr)
+			}
+
+			if allocation_fits(floored_allocation_must_end_at, free_block)
+			{
+				return Ok(self.allocated(previous_free_block_raw, floored_non_zero_size, free_block, floored_allocation_must_start_at, floored_allocation_must_end_at, end_of_all_blocks_non_null))
+			}
+
+			previous_free_block_raw = free_block_non_null.as_ptr();
+			free_block_non_null = free_block.next_free_block_non_null();
+		}
+
+		Err(AllocErr)
+	}
+
+	#[inline(always)]
+	fn allocated(&mut self, previous_free_block_raw: *mut FreeBlock, floored_non_zero_size: NonZeroUsize, free_block: &mut FreeBlock, floored_allocation_must_start_at: MemoryAddress, floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> MemoryAddress
+	{
+		if unlikely!(free_block.used_entire_block(floored_non_zero_size))
+		{
+			self.allocated_the_entire_block(free_block, previous_free_block_raw)
+		}
+		else
+		{
+			self.allocated_in_the_middle_of_the_block(free_block, previous_free_block_raw, floored_allocation_must_start_at, floored_allocation_must_end_at, end_of_all_blocks_non_null);
+		}
+
+		floored_allocation_must_start_at
+	}
+
+	#[inline(always)]
+	fn allocated_the_entire_block(&mut self, free_block: &mut FreeBlock, previous_free_block_raw: *mut FreeBlock)
+	{
+		let next_free_block_non_null = free_block.next_free_block_non_null();
+
+		let is_first_free_block_in_list = previous_free_block_raw.is_null();
+		if unlikely!(is_first_free_block_in_list)
+		{
+			self.first_free_block_non_null = next_free_block_non_null;
+		}
+		else
+		{
+			let previous_free_block_non_null = previous_free_block_raw.non_null();
+			let previous_free_block: &mut FreeBlock = next_free_block_non_null.mutable_reference();
+			previous_free_block.offset_from_start_of_this_block_to_next_block = FreeBlock::difference_u32_non_zero(next_free_block_non_null, previous_free_block_non_null);
+		}
+	}
+
+	#[inline(always)]
+	fn allocated_in_the_middle_of_the_block(&mut self, free_block: &mut FreeBlock, previous_free_block_raw: *mut FreeBlock, floored_allocation_must_start_at: MemoryAddress, floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<FreeBlock>)
+	{
+		let needs_front = floored_allocation_must_start_at > free_block.starts_at();
+		let needs_back = floored_allocation_must_end_at < free_block.ends_at();
+
+		if unlikely!(needs_front)
+		{
+			let next_free_block_non_null = free_block.next_free_block_non_null();
+			let next_block_non_null = if likely!(needs_back)
+			{
+				FreeBlock::initialize_back_block(next_free_block_non_null, free_block, floored_allocation_must_end_at, end_of_all_blocks_non_null)
+			}
+			else
+			{
+				next_free_block_non_null
+			};
+
+			let front_block = free_block;
+			front_block.initialize_front_block_and_coalesce_if_possible(floored_allocation_must_start_at, next_block_non_null, previous_free_block_raw);
+		}
+		else
+		{
+			if likely!(needs_back)
+			{
+				let next_free_block_non_null = free_block.next_free_block_non_null();
+				let back_block_non_null = FreeBlock::initialize_back_block(next_free_block_non_null, free_block, floored_allocation_must_end_at, end_of_all_blocks_non_null);
+
+				let is_first_free_block_in_list = previous_free_block_raw.is_null();
+				if unlikely!(is_first_free_block_in_list)
+				{
+					self.first_free_block_non_null = back_block_non_null;
+				}
+				else
+				{
+					let previous_free_block_non_null = previous_free_block_raw.non_null();
+					let difference = FreeBlock::difference_u32_non_zero(back_block_non_null, previous_free_block_non_null);
+
+					let previous_free_block: &mut FreeBlock = previous_free_block_non_null.mutable_reference();
+					previous_free_block.offset_from_start_of_this_block_to_next_block = difference;
+				}
+			}
+		}
+	}
+}
+
+
+/// Is always exactly 8 bytes, which is the minimum block size.
+struct FreeBlock
+{
+	// TODO: Since our minimum block size is 8 bytes, we can actually scale this value by << 3 (ie achieve a 8x fold increase, from 4Gb to 16Gb).
+	offset_from_start_of_this_block_to_next_block: NonZeroU32,
+	// TODO: Since our minimum block size is 8 bytes, we can actually scale this value by << 3 (ie achieve a 8x fold increase, from 4Gb to 16Gb).
+	size_of_this_block: NonZeroU32,
+}
+
+impl FreeBlock
+{
+	const MinimumBlockSize: usize = size_of::<Self>();
+
+	const MinimumAllocationSize: NonZeroUsize = NonZeroUsize::non_zero_unchecked(Self::MinimumBlockSize);
+
+	const MaximumAllocationSize: NonZeroUsize = NonZeroUsize::non_zero_unchecked(size_of::<u32>());
+
+	const MinimumAlignment: NonZeroUsize = Self::MinimumAllocationSize;
+
+	const MaximumAlignment: NonZeroUsize = Self::MaximumAllocationSize;
+
+	#[inline(always)]
+	pub(crate) fn floored_allocation_must_start_at_and_end_at(&self, floored_non_zero_size: NonZeroUsize, floored_non_zero_power_of_two_alignment: NonZeroUsize) -> (MemoryAddress, MemoryAddress)
+	{
+		Self::debug_assert_floored_non_zero_size(floored_non_zero_size);
+		Self::debug_assert_floored_non_zero_power_of_two_alignment(floored_non_zero_power_of_two_alignment);
+
+		let starts_at = self.starts_at();
+
+		let floored_allocation_must_start_at = starts_at.round_up_to_power_of_two(floored_non_zero_power_of_two_alignment);
+
+		debug_assert!(floored_allocation_must_start_at >= starts_at, "floored_allocation_must_start_at `{:?}` is less than starts_at `{:?}`", floored_allocation_must_start_at, starts_at);
+
+		let floored_allocation_must_end_at = floored_allocation_must_start_at.add_non_zero(floored_non_zero_size);
+
+		(floored_allocation_must_start_at, floored_allocation_must_end_at)
+	}
+
+	#[inline(always)]
+	pub(crate) fn non_null(&self) -> NonNull<Self>
+	{
+		(self as *const Self).non_null()
+	}
+
+	#[inline(always)]
+	pub(crate) fn next_free_block_non_null(&self) -> NonNull<Self>
+	{
+		(self as *const Self).add_bytes_non_zero_u32(self.offset_from_start_of_this_block_to_next_block).non_null()
+	}
+
+	#[inline(always)]
+	pub(crate) fn no_more_free_blocks(&self, end_of_all_blocks_non_null: NonNull<Self>) -> bool
+	{
+		let free_block_non_null = self.non_null();
+
+		Self::debug_assert_within_free_blocks_memory(free_block_non_null, end_of_all_blocks_non_null);
+
+		free_block_non_null == end_of_all_blocks_non_null
+	}
+
+	#[inline(always)]
+	pub(crate) fn more_free_blocks(free_block_non_null: NonNull<Self>, end_of_all_blocks_non_null: NonNull<Self>) -> bool
+	{
+		Self::debug_assert_within_free_blocks_memory(free_block_non_null, end_of_all_blocks_non_null);
+
+		free_block_non_null != end_of_all_blocks_non_null
+	}
+
+	#[inline(always)]
+	pub(crate) fn starts_at(&self) -> MemoryAddress
+	{
+		self.non_null().cast::<u8>()
+	}
+
+	#[inline(always)]
+	pub(crate) fn ends_at(&self) -> MemoryAddress
+	{
+		let size_of_this_block = self.size_of_this_block_as_usize();
+		let starts_at = self.starts_at();
+
+		starts_at.add(size_of_this_block)
+	}
+
+	#[inline(always)]
+	fn next_contiguous_block(&self) -> &Self
+	{
+		self.next_contiguous_block_non_null().reference()
+	}
+
+	#[inline(always)]
+	fn next_contiguous_block_non_null(&self) -> NonNull<Self>
+	{
+		self.ends_at().cast::<Self>()
+	}
+
+	#[inline(always)]
+	pub(crate) fn used_entire_block(&self, floored_non_zero_size: NonZeroUsize) -> bool
+	{
+		Self::debug_assert_floored_non_zero_size(floored_non_zero_size);
+
+		self.size_of_this_block == floored_non_zero_size.to_non_zero_u32()
+	}
+
+	#[inline(always)]
+	pub(crate) fn initialize_front_block_and_coalesce_if_possible(&mut self, floored_allocation_must_start_at: MemoryAddress, next_block_non_null: NonNull<Self>, previous_free_block_raw: *mut Self)
+	{
+		let front_block = self;
+		front_block.offset_from_start_of_this_block_to_next_block =  Self::difference_u32_non_zero(next_block_non_null, front_block.non_null());
+		front_block.size_of_this_block = floored_allocation_must_start_at.difference_u32_non_zero(self.starts_at());
+		Self::coalesce_previous_free_block_with_front_block_if_possible(previous_free_block_raw, front_block)
+	}
+
+	#[inline(always)]
+	pub(crate) fn initialize_back_block(next_free_block_non_null: NonNull<Self>, free_block: &Self, floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<Self>) -> NonNull<Self>
+	{
+		let back_block_non_null = floored_allocation_must_end_at.cast::<Self>();
+
+		let back_block: &mut Self = back_block_non_null.mutable_reference();
+		back_block.offset_from_start_of_this_block_to_next_block = Self::difference_u32_non_zero(next_free_block_non_null, back_block_non_null);
+		back_block.size_of_this_block = Self::difference_u32_non_zero(free_block.next_contiguous_block_non_null(), back_block_non_null);
+		back_block.coalesce(end_of_all_blocks_non_null);
+
+		back_block_non_null
+	}
+
+	#[inline(always)]
+	fn difference_u32_non_zero(later_block: NonNull<Self>, earlier_block: NonNull<Self>) -> NonZeroU32
+	{
+		later_block.cast::<u8>().difference_u32_non_zero(earlier_block.cast::<u8>())
+	}
+
+	#[inline(always)]
+	pub(crate) fn coalesce(&mut self, end_of_all_blocks_non_null: NonNull<Self>)
+	{
+		while unlikely!(self.next_free_block_starts_contiguously_after_this())
+		{
+			if unlikely!(self.no_more_free_blocks(end_of_all_blocks_non_null))
+			{
+				return
+			}
+
+			let next_contiguous_free_block = self.next_contiguous_block();
+			self.coalesce_with_next_contiguous_free_block(next_contiguous_free_block)
+		}
+	}
+
+	#[inline(always)]
+	pub(crate) fn coalesce_previous_free_block_with_front_block_if_possible(previous_free_block_raw: *mut Self, front_block: &Self)
+	{
+		let previous_free_block_exists = !previous_free_block_raw.is_null();
+		if likely!(previous_free_block_exists)
+		{
+			let previous_free_block: &Self = previous_free_block_raw.non_null().reference();
+			let front_block_is_contiguous_after_the_previous_free_block = previous_free_block.next_contiguous_block_non_null() == front_block.non_null();
+			if unlikely!(front_block_is_contiguous_after_the_previous_free_block)
+			{
+				previous_free_block.coalesce_with_next_contiguous_free_block(front_block);
+			}
+		}
+	}
+
+	#[inline(always)]
+	fn next_free_block_starts_contiguously_after_this(&self) -> bool
+	{
+		self.offset_from_start_of_this_block_to_next_block == self.size_of_this_block
+	}
+
+	#[inline(always)]
+	fn coalesce_with_next_contiguous_free_block(&mut self, next_contiguous_free_block: &Self)
+	{
+		self.increment_offset_from_start_of_this_block_to_next_block(next_contiguous_free_block.offset_from_start_of_this_block_to_next_block);
+		self.increment_size_of_this_block(next_contiguous_free_block.size_of_this_block);
+	}
+
+	#[inline(always)]
+	fn increment_offset_from_start_of_this_block_to_next_block(&mut self, increment: NonZeroU32)
+	{
+		debug_assert!(self.offset_from_start_of_this_block_to_next_block.checked_add(increment).is_some(), "coalesced block will exceed memory address space");
+		self.offset_from_start_of_this_block_to_next_block.add_assign(increment)
+	}
+
+	#[inline(always)]
+	fn increment_size_of_this_block(&mut self, increment: NonZeroU32)
+	{
+		debug_assert!(self.size_of_this_block.checked_add(increment).is_some(), "coalesced block will exceed size");
+		self.size_of_this_block.add_assign(increment)
+	}
+
+	#[inline(always)]
+	pub(crate) fn floor_size_to_minimum(unfloored_non_zero_size: NonZeroUsize) -> NonZeroUsize
+	{
+		max(unfloored_non_zero_size, Self::MinimumAllocationSize)
+	}
+
+	#[inline(always)]
+	pub(crate) fn floor_alignment_to_minimum(unfloored_non_zero_power_of_two_alignment: NonZeroUsize) -> NonZeroUsize
+	{
+		max(unfloored_non_zero_power_of_two_alignment, Self::MinimumAlignment)
+	}
+
+	#[inline(always)]
+	fn size_of_this_block_as_usize(&self) -> usize
+	{
+		let size_of_this_block_usize = self.size_of_this_block.get() as usize;
+
+		debug_assert!(self.starts_at().checked_add(size_of_this_block_usize).is_some(), "block exceeds memory address space");
+
+		size_of_this_block_usize
+	}
+
+	#[inline(always)]
+	fn debug_assert_within_free_blocks_memory(free_block_non_null: NonNull<Self>, end_of_all_blocks_non_null: NonNull<Self>)
+	{
+		debug_assert!(end_of_all_blocks_non_null >= free_block_non_null, "Got beyond end of free blocks");
+	}
+
+	#[inline(always)]
+	fn debug_assert_floored_non_zero_size(floored_non_zero_size: NonZeroUsize)
+	{
+		debug_assert!(floored_non_zero_size >= Self::MinimumAllocationSize, "non_zero_size `{}` is less than MinimumAllocationSize `{}`", floored_non_zero_size, Self::MinimumAllocationSize);
+		debug_assert!(floored_non_zero_size <= Self::MaximumAllocationSize, "non_zero_size `{}` exceeds MaximumAllocationSize `{}`", floored_non_zero_size, Self::MaximumAllocationSize);
+	}
+
+	#[inline(always)]
+	fn debug_assert_floored_non_zero_power_of_two_alignment(floored_non_zero_power_of_two_alignment: NonZeroUsize)
+	{
+		debug_assert!(floored_non_zero_power_of_two_alignment >= Self::MinimumAlignment, "floored_non_zero_power_of_two_alignment `{}` is less than MinimumAlignment `{}`", floored_non_zero_power_of_two_alignment, Self::MinimumAlignment);
+		debug_assert!(floored_non_zero_power_of_two_alignment <= Self::MaximumAlignment, "floored_non_zero_power_of_two_alignment `{}` exceeds MaximumAlignment `{}`", floored_non_zero_power_of_two_alignment, Self::MaximumAlignment);
+	}
 }
