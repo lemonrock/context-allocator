@@ -43,7 +43,6 @@ use ::std::ptr::write;
 
 include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
-//include!("Bitmap.rs");
 include!("BumpAllocator.rs");
 include!("MemoryAddress.rs");
 
