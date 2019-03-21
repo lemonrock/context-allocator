@@ -43,7 +43,7 @@ use ::std::ptr::write;
 
 include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
-include!("Bitmap.rs");
+//include!("Bitmap.rs");
 include!("BumpAllocator.rs");
 include!("MemoryAddress.rs");
 
@@ -70,14 +70,14 @@ impl LinkedListAllocator
 	#[inline(always)]
 	pub fn new(memory_starts_at: MemoryAddress, non_zero_memory_size: NonZeroUsize) -> Self
 	{
-		const MaximumAddressableMemory: NonZeroUsize = NonZeroUsize::non_zero_unchecked(::std::u32::MAX as usize);
+		const MaximumAddressableMemory: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(::std::u32::MAX as usize) };
 		assert!(non_zero_memory_size <= MaximumAddressableMemory, "non_zero_memory_size `{}` exceeds MaximumAddressableMemory (`{}`)", non_zero_memory_size, MaximumAddressableMemory);
 
 		let first_free_block_non_null = memory_starts_at.cast::<FreeBlock>();
 
 		let end_of_all_blocks_non_null = unsafe
 		{
-			let first_free_block = first_free_block_non_null.as_mut();
+			let first_free_block = first_free_block_non_null.mutable_reference();
 			let non_zero_memory_size_u32 = non_zero_memory_size.to_non_zero_u32();
 			write(&mut first_free_block.size_of_this_block, non_zero_memory_size_u32);
 			write(&mut first_free_block.offset_from_start_of_this_block_to_next_block, non_zero_memory_size_u32);
@@ -117,19 +117,19 @@ impl Allocator for LinkedListAllocator
 	}
 
 	#[inline(always)]
-	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
+	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _current_memory: NonNull<u8>)
 	{
 		unimplemented!()
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn shrinking_reallocate(&mut self, _non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, _current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
 	{
 		unimplemented!()
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn growing_reallocate(&mut self, _non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, _current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
 	{
 		unimplemented!()
 	}
@@ -141,7 +141,7 @@ impl LinkedListAllocator
 	fn allocate_loop(&mut self, floored_non_zero_size: NonZeroUsize, floored_non_zero_power_of_two_alignment: NonZeroUsize, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> Result<MemoryAddress, AllocErr>
 	{
 		#[inline(always)]
-		const fn allocation_will_never_fit_as_there_are_not_enough_blocks_remaining(floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> bool
+		fn allocation_will_never_fit_as_there_are_not_enough_blocks_remaining(floored_allocation_must_end_at: MemoryAddress, end_of_all_blocks_non_null: NonNull<FreeBlock>) -> bool
 		{
 			let end_of_all_blocks_ends_at = end_of_all_blocks_non_null.cast::<u8>();
 			floored_allocation_must_end_at > end_of_all_blocks_ends_at
@@ -262,6 +262,7 @@ impl LinkedListAllocator
 
 
 /// Is always exactly 8 bytes, which is the minimum block size.
+//#[derive(Debug, Copy, Clone)]
 struct FreeBlock
 {
 	// TODO: Since our minimum block size is 8 bytes, we can actually scale this value by << 3 (ie achieve a 8x fold increase, from 4Gb to 16Gb).
@@ -274,9 +275,9 @@ impl FreeBlock
 {
 	const MinimumBlockSize: usize = size_of::<Self>();
 
-	const MinimumAllocationSize: NonZeroUsize = NonZeroUsize::non_zero_unchecked(Self::MinimumBlockSize);
+	const MinimumAllocationSize: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(Self::MinimumBlockSize) };
 
-	const MaximumAllocationSize: NonZeroUsize = NonZeroUsize::non_zero_unchecked(size_of::<u32>());
+	const MaximumAllocationSize: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(size_of::<u32>()) };
 
 	const MinimumAlignment: NonZeroUsize = Self::MinimumAllocationSize;
 
@@ -345,7 +346,7 @@ impl FreeBlock
 	}
 
 	#[inline(always)]
-	fn next_contiguous_block(&self) -> &Self
+	fn next_contiguous_block<'a>(&self) -> &'a Self
 	{
 		self.next_contiguous_block_non_null().reference()
 	}
@@ -369,7 +370,7 @@ impl FreeBlock
 	{
 		let front_block = self;
 		front_block.offset_from_start_of_this_block_to_next_block =  Self::difference_u32_non_zero(next_block_non_null, front_block.non_null());
-		front_block.size_of_this_block = floored_allocation_must_start_at.difference_u32_non_zero(self.starts_at());
+		front_block.size_of_this_block = floored_allocation_must_start_at.difference_u32_non_zero(front_block.starts_at());
 		Self::coalesce_previous_free_block_with_front_block_if_possible(previous_free_block_raw, front_block)
 	}
 
@@ -413,7 +414,7 @@ impl FreeBlock
 		let previous_free_block_exists = !previous_free_block_raw.is_null();
 		if likely!(previous_free_block_exists)
 		{
-			let previous_free_block: &Self = previous_free_block_raw.non_null().reference();
+			let previous_free_block: &mut Self = previous_free_block_raw.non_null().mutable_reference();
 			let front_block_is_contiguous_after_the_previous_free_block = previous_free_block.next_contiguous_block_non_null() == front_block.non_null();
 			if unlikely!(front_block_is_contiguous_after_the_previous_free_block)
 			{
@@ -429,7 +430,7 @@ impl FreeBlock
 	}
 
 	#[inline(always)]
-	fn coalesce_with_next_contiguous_free_block(&mut self, next_contiguous_free_block: &Self)
+	fn coalesce_with_next_contiguous_free_block<'a>(&mut self, next_contiguous_free_block: &'a Self)
 	{
 		self.increment_offset_from_start_of_this_block_to_next_block(next_contiguous_free_block.offset_from_start_of_this_block_to_next_block);
 		self.increment_size_of_this_block(next_contiguous_free_block.size_of_this_block);

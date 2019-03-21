@@ -2,7 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-pub(crate) trait NonZeroU32Ext: Sized
+pub(crate) trait NonZeroU32Ext: Sized + Copy
 {
 	#[inline(always)]
 	fn checked_add(self, increment: Self) -> Option<Self>
