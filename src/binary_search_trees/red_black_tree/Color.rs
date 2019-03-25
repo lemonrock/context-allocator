@@ -2,18 +2,32 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-use super::*;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(usize)]
+enum Color
+{
+	Red = 0,
 
+	Black = 1,
+}
 
-include!("LayoutHack.rs");
-include!("logarithm_base2_as_usize.rs");
-include!("non_null_pointer.rs");
-include!("non_zero_u32_difference_as_usize.rs");
-include!("non_zero_u32_right_shift_as_u32.rs");
-include!("NonNullExt.rs");
-include!("NonNullU8Ext.rs");
-include!("NonZeroU32Ext.rs");
-include!("NonZeroUsizeExt.rs");
-include!("PointerExt.rs");
-include!("PointerMutExt.rs");
-include!("UsizeExt.rs");
+impl Color
+{
+	#[inline(always)]
+	pub(crate) fn color_bit(self) -> usize
+	{
+		self as usize
+	}
+
+	#[inline(always)]
+	pub(crate) fn is_red(self) -> bool
+	{
+		self == Color::Red
+	}
+
+	#[inline(always)]
+	pub(crate) fn is_black(self) -> bool
+	{
+		self == Color::Black
+	}
+}

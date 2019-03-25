@@ -17,6 +17,12 @@ pub(crate) trait NonZeroU32Ext: Sized + Copy
 	}
 
 	#[inline(always)]
+	fn next_power_of_two(self) -> Self
+	{
+		Self::non_zero_unchecked(self.to_u32().next_power_of_two())
+	}
+
+	#[inline(always)]
 	fn non_zero(value: u32) -> Self
 	{
 		debug_assert_ne!(value, 0, "value is zero");

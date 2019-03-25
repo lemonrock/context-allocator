@@ -19,6 +19,12 @@ pub(crate) trait PointerExt<T>: Sized
 	{
 		self.add_bytes_u32(offset.get())
 	}
+
+	fn to_usize(self) -> usize;
+
+	fn is_not_null(self) -> bool;
+
+	fn reference<'a>(self) -> &'a T;
 }
 
 impl<T> PointerExt<T> for *const T
@@ -34,6 +40,26 @@ impl<T> PointerExt<T> for *const T
 	{
 		((self as usize) + offset) as *const T
 	}
+
+	#[inline(always)]
+	fn to_usize(self) -> usize
+	{
+		self as usize
+	}
+
+	#[inline(always)]
+	fn is_not_null(self) -> bool
+	{
+		!self.is_null()
+	}
+
+	#[inline(always)]
+	fn reference<'a>(self) -> &'a T
+	{
+		debug_assert!(self.is_not_null(), "null pointers can not be derefenced");
+
+		unsafe { & * self }
+	}
 }
 
 impl<T> PointerExt<T> for *mut T
@@ -48,5 +74,25 @@ impl<T> PointerExt<T> for *mut T
 	fn add_bytes(self, offset: usize) -> Self
 	{
 		((self as usize) + offset) as *mut T
+	}
+
+	#[inline(always)]
+	fn to_usize(self) -> usize
+	{
+		self as usize
+	}
+
+	#[inline(always)]
+	fn is_not_null(self) -> bool
+	{
+		!self.is_null()
+	}
+
+	#[inline(always)]
+	fn reference<'a>(self) -> &'a T
+	{
+		debug_assert!(self.is_not_null(), "null pointers can not be derefenced");
+
+		unsafe { & * self }
 	}
 }

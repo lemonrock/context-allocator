@@ -40,6 +40,12 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn add_assign_non_zero(&mut self, increment: NonZeroUsize)
+	{
+		self.add_assign(increment.get())
+	}
+
+	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
 		debug_assert!(self >= other, "other `{:?}` is less than self `{:?}`", other, self);
@@ -86,6 +92,12 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		let pointer = self.to_usize() as *mut u8;
 		let current_value = unsafe { *pointer };
 		unsafe { *pointer = current_value | bits_to_set }
+	}
+
+	#[inline(always)]
+	fn is_aligned_to(self, non_zero_power_of_two_alignment: NonZeroUsize) -> bool
+	{
+		self.to_usize() & (non_zero_power_of_two_alignment.get() - 1) == 0
 	}
 
 	#[doc(hidden)]
