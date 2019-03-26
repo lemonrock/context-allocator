@@ -37,6 +37,12 @@ impl RedBlackTree
 	}
 
 	#[inline(always)]
+	pub(crate) fn has_blocks(&self) -> bool
+	{
+		self.root.is_not_null()
+	}
+
+	#[inline(always)]
 	pub(crate) fn first_child(&self) -> NodePointer
 	{
 		self.root.first_child()

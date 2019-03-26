@@ -24,6 +24,12 @@ impl Default for BinarySearchTreeWithCachedKnowledgeOfFirstChild
 impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 {
 	#[inline(always)]
+	fn has_blocks(&self) -> bool
+	{
+		self.tree.has_blocks()
+	}
+
+	#[inline(always)]
 	fn find(&self, key: MemoryAddress) -> NodePointer
 	{
 		self.tree.find(key)
@@ -92,7 +98,9 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	#[inline(always)]
 	fn insert_memory_address(&mut self, memory_address: MemoryAddress)
 	{
-		if unlikely!(memory_address < self.cached_first_child().value())
+		let cached_first_child = self.cached_first_child();
+
+		if unlikely!(cached_first_child.is_null() || memory_address < cached_first_child.value())
 		{
 			self.update_cached_first_child(memory_address.node_pointer())
 		}
@@ -307,10 +315,13 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 
 		let binary_search_tree = self.binary_search_tree_for_block_size(block_size);
 
-		// TODO: Optimization - no need to check for coalesce if the binary_search_tree was previously empty.
 		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
+		let has_blocks = binary_search_tree.has_blocks();
 		let inserted_node_pointer = binary_search_tree.insert_memory_address(current_memory);
-		self.coalesce(inserted_node_pointer, block_size, binary_search_tree);
+		if likely!(has_blocks)
+		{
+			self.coalesce(inserted_node_pointer, block_size, binary_search_tree);
+		}
 	}
 
 	#[inline(always)]
@@ -375,7 +386,6 @@ impl MultipleBinarySearchTreeAllocator
 		{
 			let smallest_power_of_two_difference = Self::smallest_power_of_two_difference(difference);
 
-			// TODO: Will not affect first_child.
 			self.deallocate(smallest_power_of_two_difference, smallest_power_of_two_difference, from);
 
 			from.add_assign_non_zero(smallest_power_of_two_difference);
