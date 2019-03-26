@@ -2,6 +2,11 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// An allocator which uses sorted lists (red-black binary search trees) of different block sizes.
+///
+/// Each sorted list contains a different block size.
+///
+/// Block sizes are powers of 2; the smallest is currently 16.
 #[derive(Debug)]
 pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
 
@@ -93,7 +98,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 
 		// (1) Try to satisfy allocation from a binary search tree of blocks of the same size.
 		let binary_search_tree_index_for_blocks_of_exact_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(non_zero_size);
-		const Unused: () = ();
+		#[allow(dead_code)] const Unused: () = ();
 		try_to_satisfy_allocation!(try_to_allocate_exact_size_block, binary_search_tree_index_for_blocks_of_exact_size, non_zero_power_of_two_alignment, Unused, Unused, Unused);
 
 		// (2) Try to satisfy allocation from binary search trees of blocks of larger size (either because of exhaustion or a large alignment).
@@ -114,14 +119,14 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	{
 		let block_size = Self::block_size(non_zero_size);
 
-		let binary_search_tree = self.binary_search_tree_for_block_size(block_size);
-
+		let binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(block_size);
 		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
+		let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
 		let has_blocks = binary_search_tree.has_blocks();
 		let inserted_node_pointer = binary_search_tree.insert_memory_address(current_memory);
 		if likely!(has_blocks)
 		{
-			self.coalesce(inserted_node_pointer, block_size, binary_search_tree);
+			self.coalesce(inserted_node_pointer, block_size, binary_search_tree_index);
 		}
 	}
 
@@ -194,7 +199,7 @@ impl MultipleBinarySearchTreeAllocator
 		}
 	}
 
-	fn coalesce(&mut self, inserted_node_pointer: NodePointer, block_size: NonZeroUsize, binary_search_tree: &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild)
+	fn coalesce(&mut self, inserted_node_pointer: NodePointer, block_size: NonZeroUsize, binary_search_tree_index: usize)
 	{
 		let furthest_back_contiguous_with_inserted_node_pointer_memory_address = inserted_node_pointer.furthest_back_contiguous_with(block_size);
 
@@ -209,9 +214,16 @@ impl MultipleBinarySearchTreeAllocator
 			return
 		}
 
-		let (first_block_memory_address, last_block_memory_address) = binary_search_tree.blocks_to_coalesce(inserted_node_pointer, difference.non_zero(), block_size, furthest_back_contiguous_with_inserted_node_pointer_memory_address, furthest_forward_contiguous_with_inserted_node_pointer_memory_address);
+		let first_block_memory_address =
+		{
+			let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
 
-		binary_search_tree.remove_contiguous_blocks(first_block_memory_address, last_block_memory_address, block_size);
+			let (first_block_memory_address, last_block_memory_address) = binary_search_tree.blocks_to_coalesce(inserted_node_pointer, difference.non_zero(), block_size, furthest_back_contiguous_with_inserted_node_pointer_memory_address, furthest_forward_contiguous_with_inserted_node_pointer_memory_address);
+
+			binary_search_tree.remove_contiguous_blocks(first_block_memory_address, last_block_memory_address, block_size);
+
+			first_block_memory_address
+		};
 
 		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
 		let mut difference = difference;

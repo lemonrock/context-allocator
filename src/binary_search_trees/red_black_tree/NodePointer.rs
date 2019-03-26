@@ -71,19 +71,6 @@ impl NodePointer
 	}
 
 	#[inline(always)]
-	pub(crate) fn optional_value(self) -> Option<MemoryAddress>
-	{
-		if unlikely!(self.is_null())
-		{
-			None
-		}
-		else
-		{
-			Some(self.value())
-		}
-	}
-
-	#[inline(always)]
 	pub(crate) fn value(self) -> MemoryAddress
 	{
 		debug_assert!(self.is_not_null(), "null NodePointers do not have a value");
@@ -194,6 +181,7 @@ impl NodePointer
 		}
 	}
 
+	#[allow(dead_code)]
 	#[inline(always)]
 	pub(crate) fn last_child(self) -> Self
 	{
@@ -448,6 +436,7 @@ impl NodePointer
 		}
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn replace_with(self, new: Self, root: &mut Self)
 	{
 		let parent = self.parent();
@@ -519,7 +508,7 @@ impl NodePointer
 	#[inline(always)]
 	pub(crate) fn set_left(self, left: Self)
 	{
-		self.node_reference().left.set(left);
+		self.node_reference().set_left(left);
 	}
 
 	#[inline(always)]
@@ -531,7 +520,7 @@ impl NodePointer
 	#[inline(always)]
 	pub(crate) fn set_right(self, right: Self)
 	{
-		self.node_reference().right.set(right);
+		self.node_reference().set_right(right);
 	}
 
 	/// This code is based on the red-black tree implementation in libc++.

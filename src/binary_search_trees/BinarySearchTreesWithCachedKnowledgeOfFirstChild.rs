@@ -94,6 +94,7 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 		(1 << difference.trailing_zeros()).non_zero()
 	}
 
+	#[allow(dead_code)]
 	#[inline(always)]
 	pub(crate) fn largest_power_of_two_difference(difference: usize) -> NonZeroUsize
 	{

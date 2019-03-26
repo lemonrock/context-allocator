@@ -103,6 +103,7 @@ impl RedBlackTree
 	/// Gets an iterator over the objects in the `RedBlackTree`, in ascending key order.
 	///
 	/// Creating the iterator itself is not efficient.
+	#[allow(dead_code)]
 	#[inline(always)]
 	pub(crate) fn double_ended_iterate<'a>(&'a self) -> RedBlackTreeDoubleEndedIterator<'a>
 	{
@@ -135,6 +136,7 @@ impl RedBlackTree
 	/// If `maximum` or `minimum` is not found then a then an empty iterator is returned.
 	///
 	/// Creating the iterator itself is not efficient.
+	#[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn double_ended_range_iterate<'a>(&'a self, minimum: Bound<MemoryAddress>, maximum: Bound<MemoryAddress>) -> RedBlackTreeDoubleEndedIterator<'a>
     {
@@ -190,6 +192,7 @@ impl RedBlackTree
 	/// Returns a `NodePointer` pointing to the first element whose key is above the given bound.
 	///
 	/// If no such element is found then a null `NodePointer` is returned.
+	#[allow(dead_code)]
     #[inline(always)]
 	pub(crate) fn lower_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
     {
@@ -222,6 +225,7 @@ impl RedBlackTree
 	/// Returns a `NodePointer` pointing to the last element whose key is below the given bound.
 	///
 	/// If no such element is found then a null `NodePointer` is returned.
+	#[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn upper_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
     {
