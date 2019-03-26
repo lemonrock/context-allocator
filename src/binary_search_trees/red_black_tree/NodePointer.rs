@@ -16,6 +16,54 @@ impl Default for NodePointer
 
 impl NodePointer
 {
+	pub(crate) fn furthest_back_contiguous_with(self, block_size: NonZeroUsize) -> MemoryAddress
+	{
+		let mut after = self;
+		let mut before = self.previous();
+		loop
+		{
+			if unlikely!(before.is_contiguous_before(after, block_size))
+			{
+				after = before;
+				before = before.previous();
+				continue
+			}
+			break after.value()
+		}
+	}
+
+	pub(crate) fn furthest_forward_contiguous_with(self, block_size: NonZeroUsize) -> MemoryAddress
+	{
+		let mut before = self;
+		let mut after = self.next();
+		loop
+		{
+			if unlikely!(before.is_contiguous_before(after, block_size))
+			{
+				before = after;
+				after = after.next();
+				continue
+			}
+			break before.value()
+		}
+	}
+
+	#[inline(always)]
+	fn is_contiguous_before(self, after: Self, block_size: NonZeroUsize) -> bool
+	{
+		debug_assert!(after.is_not_null(), "after must not be null");
+
+		let before = self;
+
+		before.is_not_null() && before.end_memory_address(block_size) == after
+	}
+
+	#[inline(always)]
+	fn end_memory_address(self, size: NonZeroUsize) -> MemoryAddress
+	{
+		self.value().add_non_zero(size)
+	}
+
 	#[inline(always)]
 	pub(crate) fn optional_value(self) -> Option<MemoryAddress>
 	{
@@ -167,99 +215,18 @@ impl NodePointer
 		x
 	}
 
-	pub(crate) fn replace_with(self, new: Self, root: &mut Self)
-	{
-		let parent = self.parent();
-
-		if unlikely!(parent.is_null())
-		{
-			*root = new;
-		}
-		else if self.is_left_child()
-		{
-			parent.set_left(new);
-		}
-		else
-		{
-			parent.set_right(new);
-		}
-
-		let left = self.left();
-		if likely!(left.is_not_null())
-		{
-			left.set_parent(new);
-		}
-
-		let right = self.right();
-		if likely!(right.is_not_null())
-		{
-			right.set_parent(new);
-		}
-
-		new.set_left(left);
-		new.set_right(right);
-		new.set_parent_and_color(parent, self.color())
-	}
-
 	#[inline(always)]
-	pub(crate) fn insert_left(self, new: Self, root: &mut Self)
+	pub(crate) fn reset(self)
 	{
-		new.set_parent_and_color(self, Red);
-		new.set_left(Self::null());
-		new.set_right(Self::null());
-		self.set_left(new);
-		new.post_insert(root)
-	}
-
-	#[inline(always)]
-	pub(crate) fn insert_right(self, new: Self, root: &mut Self)
-	{
-		new.set_parent_and_color(self, Red);
-		new.set_left(Self::null());
-		new.set_right(Self::null());
-		self.set_right(new);
-		new.post_insert(root)
-	}
-
-	#[inline(always)]
-	pub(crate) fn parent(self) -> Self
-	{
-		self.node_reference().parent()
-	}
-
-	#[inline(always)]
-	pub(crate) fn color(self) -> Color
-	{
-		self.node_reference().color()
-	}
-
-	#[inline(always)]
-	pub(crate) fn left(self) -> Self
-	{
-		self.node_reference().left()
-	}
-
-	#[inline(always)]
-	pub(crate) fn set_left(self, left: Self)
-	{
-		self.node_reference().left.set(left);
-	}
-
-	#[inline(always)]
-	pub(crate) fn right(self) -> Self
-	{
-		self.node_reference().right()
-	}
-
-	#[inline(always)]
-	pub(crate) fn set_right(self, right: Self)
-	{
-		self.node_reference().right.set(right);
+		debug_assert!(self.is_not_null(), "Can not reset() on a null NodePointer");
+		self.mutable_node_reference().reset()
 	}
 
 	/// This code is based on the red-black tree implementation in libc++.
 	pub(crate) fn remove(self, root: &mut Self)
 	{
+		debug_assert!(self.is_not_null(), "Can not remove null");
+
 		let y = if unlikely!(self.left().is_null() || self.right().is_null())
 		{
 			self
@@ -471,6 +438,96 @@ impl NodePointer
 				}
 			}
 		}
+	}
+
+	pub(crate) fn replace_with(self, new: Self, root: &mut Self)
+	{
+		let parent = self.parent();
+
+		if unlikely!(parent.is_null())
+		{
+			*root = new;
+		}
+		else if self.is_left_child()
+		{
+			parent.set_left(new);
+		}
+		else
+		{
+			parent.set_right(new);
+		}
+
+		let left = self.left();
+		if likely!(left.is_not_null())
+		{
+			left.set_parent(new);
+		}
+
+		let right = self.right();
+		if likely!(right.is_not_null())
+		{
+			right.set_parent(new);
+		}
+
+		new.set_left(left);
+		new.set_right(right);
+		new.set_parent_and_color(parent, self.color())
+	}
+
+	#[inline(always)]
+	pub(crate) fn insert_left(self, new: Self, root: &mut Self)
+	{
+		new.set_parent_and_color(self, Red);
+		new.set_left(Self::null());
+		new.set_right(Self::null());
+		self.set_left(new);
+		new.post_insert(root)
+	}
+
+	#[inline(always)]
+	pub(crate) fn insert_right(self, new: Self, root: &mut Self)
+	{
+		new.set_parent_and_color(self, Red);
+		new.set_left(Self::null());
+		new.set_right(Self::null());
+		self.set_right(new);
+		new.post_insert(root)
+	}
+
+	#[inline(always)]
+	pub(crate) fn parent(self) -> Self
+	{
+		self.node_reference().parent()
+	}
+
+	#[inline(always)]
+	pub(crate) fn color(self) -> Color
+	{
+		self.node_reference().color()
+	}
+
+	#[inline(always)]
+	pub(crate) fn left(self) -> Self
+	{
+		self.node_reference().left()
+	}
+
+	#[inline(always)]
+	pub(crate) fn set_left(self, left: Self)
+	{
+		self.node_reference().left.set(left);
+	}
+
+	#[inline(always)]
+	pub(crate) fn right(self) -> Self
+	{
+		self.node_reference().right()
+	}
+
+	#[inline(always)]
+	pub(crate) fn set_right(self, right: Self)
+	{
+		self.node_reference().right.set(right);
 	}
 
 	/// This code is based on the red-black tree implementation in libc++.
@@ -697,6 +754,12 @@ impl NodePointer
 	fn node_reference<'a>(self) -> &'a Node
 	{
 		self.0.reference()
+	}
+
+	#[inline(always)]
+	fn mutable_node_reference<'a>(self) -> &'a mut Node
+	{
+		self.0.mutable_reference()
 	}
 
 	#[inline(always)]

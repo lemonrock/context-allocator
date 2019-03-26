@@ -100,6 +100,12 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.to_usize() & (non_zero_power_of_two_alignment.get() - 1) == 0
 	}
 
+	#[inline(always)]
+	fn node_pointer(self) -> NodePointer
+	{
+		NodePointer(self.as_ptr() as *mut Node as *const _)
+	}
+
 	#[doc(hidden)]
 	fn to_usize(self) -> usize;
 

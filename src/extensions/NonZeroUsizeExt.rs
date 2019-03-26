@@ -42,6 +42,12 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn is_odd(self) -> bool
+	{
+		self.to_usize().is_odd()
+	}
+
+	#[inline(always)]
 	fn to_non_zero_u32(self) -> NonZeroU32
 	{
 		let usize = self.to_usize();

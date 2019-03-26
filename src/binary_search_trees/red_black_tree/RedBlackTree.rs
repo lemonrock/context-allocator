@@ -2,10 +2,19 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct RedBlackTree
 {
 	root: NodePointer,
+}
+
+impl Default for RedBlackTree
+{
+	#[inline(always)]
+	fn default() -> Self
+	{
+		Self::new()
+	}
 }
 
 impl RedBlackTree
@@ -27,95 +36,23 @@ impl RedBlackTree
 		self.root.is_null()
 	}
 
-	/// Returns a `Cursor` pointing to the first element of the tree.
-	///
-	/// If the the tree is empty then a null cursor is returned.
 	#[inline(always)]
-	pub(crate) fn front<'a>(&'a mut self) -> Cursor<'a>
+	pub(crate) fn first_child(&self) -> NodePointer
 	{
-		let mut cursor = self.cursor();
-		cursor.move_next();
-		cursor
+		self.root.first_child()
 	}
 
-	/// Returns a `Cursor` pointing to the last element of the tree.
-	///
-	/// If the tree is empty then a null cursor is returned.
-	#[inline]
-	pub(crate) fn back<'a>(&'a mut self) -> Cursor<'a>
+	#[inline(always)]
+	pub(crate) fn remove_node_pointer(&mut self, node_pointer: NodePointer)
 	{
-		let mut cursor = self.cursor();
-		cursor.move_previous();
-		cursor
+		node_pointer.remove(&mut self.root)
 	}
 
-	/// Returns a null `Cursor` for this tree.
 	#[inline(always)]
-	pub(crate) fn cursor<'a>(&'a mut self) -> Cursor<'a>
+	pub(crate) fn insert_memory_address(&mut self, value: MemoryAddress) -> NodePointer
 	{
-		Cursor
-		{
-			current: NodePointer::default(),
-			tree: self,
-		}
-	}
+		let new = self.reset_node(value);
 
-    /// Returns a `Cursor` pointing to an element with the given key.
-    ///
-	/// If no such element is found then a null cursor is returned.
-    ///
-    /// If multiple elements with an identical key are found then an arbitrary one is returned.
-	///
-	/// Creating the cursor is not efficient.
-    #[inline(always)]
-    pub(crate) fn find<'a>(&'a mut self, key: &MemoryAddress) -> Cursor<'a>
-    {
-        Cursor
-		{
-            current: self.find_internal(key),
-            tree: self,
-        }
-    }
-
-    /// Returns a `Cursor` pointing to the first element whose key is above the given bound.
-    ///
-    /// If no such element is found then a null cursor is returned.
-	///
-	/// Creating the cursor is not efficient.
-    #[inline(always)]
-    pub(crate) fn lower_bound<'a>(&'a mut self, bound: Bound<&MemoryAddress>) -> Cursor<'a>
-    {
-        Cursor
-		{
-            current: self.lower_bound_internal(bound),
-            tree: self,
-        }
-    }
-
-	/// Returns a `Cursor` pointing to the last element whose key is below the given bound.
-	///
-	/// If no such element is found then a null cursor is returned.
-	///
-	/// Creating the cursor is not efficient.
-    #[inline(always)]
-    pub(crate) fn upper_bound<'a>(&'a mut self, bound: Bound<&MemoryAddress>) -> Cursor<'a>
-    {
-        Cursor
-		{
-            current: self.upper_bound_internal(bound),
-            tree: self,
-        }
-    }
-
-	/// Inserts a new element into the `RedBlackTree`.
-	///
-	/// The new element will be inserted at the correct position in the tree based on its key.
-	///
-	/// Returns a mutable cursor pointing to the newly added element.
-	#[inline(always)]
-	pub(crate) fn insert<'a>(&'a mut self, value: MemoryAddress) -> Cursor<'a>
-	{
-		let new = self.node_from_value(value);
 		if unlikely!(self.is_empty())
 		{
 			self.insert_root(new);
@@ -128,36 +65,33 @@ impl RedBlackTree
 			{
 				if key < tree.key()
 				{
-					if unlikely!(tree.left().is_null())
+					let left = tree.left();
+					if unlikely!(left.is_null())
 					{
 						tree.insert_left(new, &mut self.root);
-						break;
+						break
 					}
 					else
 					{
-						tree = tree.left();
+						tree = left
 					}
 				}
 				else
 				{
-					if unlikely!(tree.right().is_null())
+					let right = tree.right();
+					if unlikely!(right.is_null())
 					{
 						tree.insert_right(new, &mut self.root);
-						break;
+						break
 					}
 					else
 					{
-						tree = tree.right();
+						tree = right
 					}
 				}
 			}
 		}
-
-		Cursor
-		{
-			current: new,
-			tree: self,
-		}
+		new
 	}
 
 	/// Gets an iterator over the objects in the `RedBlackTree`, in ascending key order.
@@ -225,19 +159,11 @@ impl RedBlackTree
 		}
     }
 
-	#[inline(always)]
-	fn empty_iterator<'a>(&'a self) -> RedBlackTreeDoubleEndedIterator<'a>
-	{
-		RedBlackTreeDoubleEndedIterator
-		{
-			head: NodePointer::default(),
-			tail: NodePointer::default(),
-			tree: self,
-		}
-	}
-
+	/// Returns a `NodePointer` pointing to an element with the given key.
+	///
+	/// If no such element is found then a null `NodePointer` is returned.
     #[inline(always)]
-    fn find_internal<'a>(&self, key: &MemoryAddress) -> NodePointer
+	pub(crate) fn find(&self, key: MemoryAddress) -> NodePointer
     {
 		use self::Ordering::*;
 
@@ -255,8 +181,11 @@ impl RedBlackTree
         NodePointer::default()
     }
 
+	/// Returns a `NodePointer` pointing to the first element whose key is above the given bound.
+	///
+	/// If no such element is found then a null `NodePointer` is returned.
     #[inline(always)]
-    fn lower_bound_internal<'a>(&self, bound: Bound<&MemoryAddress>) -> NodePointer
+	pub(crate) fn lower_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
     {
         let mut tree = self.root;
         let mut result = NodePointer::default();
@@ -266,9 +195,9 @@ impl RedBlackTree
 			{
                 Unbounded => true,
 
-                Included(key) => key <= &tree.key(),
+                Included(key) => key <= tree.key(),
 
-                Excluded(key) => key < &tree.key(),
+                Excluded(key) => key < tree.key(),
             };
 
             if cond
@@ -284,8 +213,11 @@ impl RedBlackTree
         result
     }
 
+	/// Returns a `NodePointer` pointing to the last element whose key is below the given bound.
+	///
+	/// If no such element is found then a null `NodePointer` is returned.
     #[inline(always)]
-    fn upper_bound_internal<'a>(&self, bound: Bound<&MemoryAddress>) -> NodePointer
+    pub(crate) fn upper_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
     {
         let mut tree = self.root;
         let mut result = NodePointer::default();
@@ -295,9 +227,9 @@ impl RedBlackTree
 			{
                 Unbounded => false,
 
-                Included(key) => key < &tree.key(),
+                Included(key) => key < tree.key(),
 
-                Excluded(key) => key <= &tree.key(),
+                Excluded(key) => key <= tree.key(),
             };
 
             if cond
@@ -314,9 +246,22 @@ impl RedBlackTree
     }
 
 	#[inline(always)]
-	fn node_from_value(&self, value: MemoryAddress) -> NodePointer
+	fn empty_iterator<'a>(&'a self) -> RedBlackTreeDoubleEndedIterator<'a>
 	{
-		NodePointer(value.cast::<Node>().as_ptr() as *const Node)
+		RedBlackTreeDoubleEndedIterator
+		{
+			head: NodePointer::default(),
+			tail: NodePointer::default(),
+			tree: self,
+		}
+	}
+
+	#[inline(always)]
+	fn reset_node(&self, value: MemoryAddress) -> NodePointer
+	{
+		let node_pointer = value.node_pointer();
+		node_pointer.reset();
+		node_pointer
 	}
 
 	#[inline(always)]

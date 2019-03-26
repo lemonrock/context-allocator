@@ -13,7 +13,7 @@ struct Node
 impl Node
 {
 	#[inline(always)]
-	pub fn reset_after_deallocation(&mut self)
+	pub(crate) fn reset(&mut self)
 	{
 		self.left = Cell::default();
 		self.right = Cell::default();
