@@ -20,6 +20,7 @@
 #[macro_use] extern crate likely;
 
 
+use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::extensions::*;
 use ::std::alloc::CannotReallocInPlace;
@@ -51,6 +52,7 @@ include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
 include!("BumpAllocator.rs");
 include!("MemoryAddress.rs");
+include!("MultipleBinarySearchTreeAllocator.rs");
 
 
 pub(crate) mod binary_search_trees;

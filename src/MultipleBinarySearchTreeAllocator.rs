@@ -2,6 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+#[derive(Debug)]
 pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
 
 impl Allocator for MultipleBinarySearchTreeAllocator
@@ -16,9 +17,9 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 				{
 					let memory_address = $node_pointer.value();
 
-					if likely!($memory_address.is_aligned_to($non_zero_power_of_two_alignment))
+					if likely!(memory_address.is_aligned_to($non_zero_power_of_two_alignment))
 					{
-						$binary_search_tree.remove($node_pointer, $is_original_first_child)
+						$binary_search_tree.remove($node_pointer, $is_original_first_child);
 
 						return Ok(memory_address)
 					}
@@ -38,13 +39,13 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 					{
 						if likely!(memory_address.is_aligned_to($floored_non_zero_power_of_two_alignment))
 						{
-							$binary_search_tree.remove($node_pointer, $is_original_first_child)
+							$binary_search_tree.remove($node_pointer, $is_original_first_child);
 
 							// Block(s) at front.
-							$self.split_up_block(start_memory_address, memory_address)
+							$self.split_up_block(start_memory_address, memory_address);
 
 							// Blocks(s) at end.
-							$self.split_up_block(memory_address.add($exact_block_size), end_memory_address)
+							$self.split_up_block(memory_address.add($exact_block_size), end_memory_address);
 
 							return Ok(memory_address)
 						}
@@ -67,12 +68,12 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 					let original_first_child = binary_search_tree.cached_first_child();
 					if likely!(original_first_child.is_not_null())
 					{
-						callback!(original_first_child, true, non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
+						$callback!(original_first_child, true, $non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
 
 						let mut node_pointer = original_first_child;
 						while likely!(node_pointer.is_not_null())
 						{
-							callback!(node_pointer, false, non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
+							$callback!(node_pointer, false, $non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
 							node_pointer = node_pointer.next();
 						}
 					}
@@ -98,9 +99,9 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		// (2) Try to satisfy allocation from binary search trees of blocks of larger size (either because of exhaustion or a large alignment).
 		let floored_non_zero_power_of_two_alignment = BinarySearchTreesWithCachedKnowledgeOfFirstChild::floor_alignment_to_minimum(non_zero_power_of_two_alignment);
 		let exact_block_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index_to_block_size(binary_search_tree_index_for_blocks_of_exact_size);
-		for binary_search_tree_index_of_larger_size_block in (binary_search_tree_index_for_blocks_of_exact_size + 1) .. BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfSinglyLinkedListsOfFreeBlocks
+		for binary_search_tree_index_of_larger_size_block in (binary_search_tree_index_for_blocks_of_exact_size + 1) .. BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees
 		{
-			let block_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index_to_block_size(binary_search_tree_index);
+			let block_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index_to_block_size(binary_search_tree_index_of_larger_size_block);
 
 			try_to_satisfy_allocation!(try_to_allocate_larger_sized_block, binary_search_tree_index_of_larger_size_block, floored_non_zero_power_of_two_alignment, block_size, exact_block_size, self);
 		}
@@ -155,7 +156,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		// (2) For a simple doubling, it can be more efficient to try to coalesce two blocks.
 		//
 		// This technique could work for other approaches, eg quadrupling, but it becomes a lot more complex - and the gain over an efficient memory copy is probably lost.
-		if new_block_size == old_block_size * 2
+		if new_block_size == old_block_size.doubled()
 		{
 			let binary_search_tree = self.binary_search_tree_for_block_size(old_block_size);
 			let contiguous_block_node_pointer = binary_search_tree.find(current_memory.add_non_zero(old_block_size));
@@ -169,8 +170,8 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		}
 
 		// (3) Allocate a new block and copy over data.
-		let block_to_copy_into = self.allocate(&mut self, non_zero_new_size, non_zero_power_of_two_alignment)?;
-		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), count) };
+		let block_to_copy_into = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
+		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), non_zero_current_size.get()) };
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
 		Ok(block_to_copy_into)
 	}
@@ -184,7 +185,7 @@ impl MultipleBinarySearchTreeAllocator
 		let mut difference = to.difference(from);
 		while likely!(difference != 0)
 		{
-			let smallest_power_of_two_difference = Self::smallest_power_of_two_difference(difference);
+			let smallest_power_of_two_difference = BinarySearchTreesWithCachedKnowledgeOfFirstChild::smallest_power_of_two_difference(difference);
 
 			self.deallocate(smallest_power_of_two_difference, smallest_power_of_two_difference, from);
 
@@ -213,10 +214,11 @@ impl MultipleBinarySearchTreeAllocator
 		binary_search_tree.remove_contiguous_blocks(first_block_memory_address, last_block_memory_address, block_size);
 
 		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
+		let mut difference = difference;
 		let mut from = first_block_memory_address;
 		while
 		{
-			let smallest_power_of_two_difference = Self::smallest_power_of_two_difference(difference);
+			let smallest_power_of_two_difference = BinarySearchTreesWithCachedKnowledgeOfFirstChild::smallest_power_of_two_difference(difference);
 			debug_assert_ne!(smallest_power_of_two_difference, block_size, "difference should never be block_size");
 
 			self.deallocate(smallest_power_of_two_difference, smallest_power_of_two_difference, from);
@@ -238,35 +240,12 @@ impl MultipleBinarySearchTreeAllocator
 	#[inline(always)]
 	fn block_size(non_zero_size: NonZeroUsize) -> NonZeroUsize
 	{
-		BinarySearchTreesWithCachedKnowledgeOfFirstChild::floor_size_to_minimum(non_zero_size).round_up_to_power_of_two()
+		BinarySearchTreesWithCachedKnowledgeOfFirstChild::floor_size_to_minimum(non_zero_size).next_power_of_two()
 	}
 
 	#[inline(always)]
 	fn binary_search_tree_for(&mut self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		self.0.binary_search_tree_for(binary_search_tree_index)
-	}
-
-	#[inline(always)]
-	fn largest_power_of_two_difference(difference: usize) -> NonZeroUsize
-	{
-		debug_assert!(difference >= BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAllocationSize.get(), "difference `{}` is too small to be a block");
-
-		const BitsInAByte: usize = 8;
-		const BitsInAnUsize: usize = size_of::<usize>() * BitsInAByte;
-		const ZeroBased: usize = BitsInAnUsize - 1;
-
-		let shift = ZeroBased - difference.leading_zeros() as usize;
-
-		(1 << shift).non_zero()
-
-	}
-
-	#[inline(always)]
-	fn smallest_power_of_two_difference(difference: usize) -> NonZeroUsize
-	{
-		debug_assert!(difference >= BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAllocationSize.get(), "difference `{}` is too small to be a block");
-
-		(1 << difference.trailing_zeros()).non_zero()
 	}
 }

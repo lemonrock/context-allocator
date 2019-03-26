@@ -61,6 +61,12 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn doubled(self) -> NonZeroUsize
+	{
+		(self.to_usize() << 1).non_zero()
+	}
+
+	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
 		debug_assert!(self >= other, "other `{:?}` is less than self `{:?}`", other, self);

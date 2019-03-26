@@ -2,6 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+#[derive(Debug)]
 pub(crate) struct BinarySearchTreeWithCachedKnowledgeOfFirstChild
 {
 	tree: RedBlackTree,
@@ -24,19 +25,19 @@ impl Default for BinarySearchTreeWithCachedKnowledgeOfFirstChild
 impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 {
 	#[inline(always)]
-	fn has_blocks(&self) -> bool
+	pub(crate) fn has_blocks(&self) -> bool
 	{
 		self.tree.has_blocks()
 	}
 
 	#[inline(always)]
-	fn find(&self, key: MemoryAddress) -> NodePointer
+	pub(crate) fn find(&self, key: MemoryAddress) -> NodePointer
 	{
 		self.tree.find(key)
 	}
 
 	#[inline(always)]
-	fn blocks_to_coalesce(&mut self, inserted_node_pointer: NodePointer, difference: NonZeroUsize, block_size: NonZeroUsize, furthest_back_contiguous_with_inserted_node_pointer_memory_address: MemoryAddress, furthest_forward_contiguous_with_inserted_node_pointer_memory_address: MemoryAddress) -> (MemoryAddress, MemoryAddress)
+	pub(crate) fn blocks_to_coalesce(&mut self, inserted_node_pointer: NodePointer, difference: NonZeroUsize, block_size: NonZeroUsize, furthest_back_contiguous_with_inserted_node_pointer_memory_address: MemoryAddress, furthest_forward_contiguous_with_inserted_node_pointer_memory_address: MemoryAddress) -> (MemoryAddress, MemoryAddress)
 	{
 		let number_of_contiguous_blocks_excluding_inserted_node = difference.divide_power_of_two_by_power_of_two(block_size);
 
@@ -56,20 +57,20 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 			else if unlikely!(furthest_back_contiguous_with_inserted_node_pointer_memory_address == insert_node_pointer_memory_address)
 			{
 				let furthest_back_node_pointer = furthest_back_contiguous_with_inserted_node_pointer_memory_address.node_pointer();
+
 				(furthest_back_node_pointer.next().value(), furthest_forward_contiguous_with_inserted_node_pointer_memory_address)
 			}
 			else
 			{
-				self.insert_memory_address(furthest_back_contiguous_with_inserted_node_pointer_memory_address);
+				let furthest_back_node_pointer = self.insert_memory_address(furthest_back_contiguous_with_inserted_node_pointer_memory_address);
 
-				let furthest_back_node_pointer = furthest_back_contiguous_with_inserted_node_pointer_memory_address.node_pointer();
 				(furthest_back_node_pointer.next().value(), furthest_forward_contiguous_with_inserted_node_pointer_memory_address)
 			}
 		}
 	}
 
 	#[inline(always)]
-	fn remove_contiguous_blocks(&mut self, first_block_memory_address: MemoryAddress, last_block_memory_address: MemoryAddress, block_size: NonZeroUsize)
+	pub(crate) fn remove_contiguous_blocks(&mut self, first_block_memory_address: MemoryAddress, last_block_memory_address: MemoryAddress, block_size: NonZeroUsize)
 	{
 		let mut to_remove_memory_address = first_block_memory_address;
 		while
@@ -85,7 +86,7 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	}
 
 	#[inline(always)]
-	fn remove(&mut self, node_pointer: NodePointer, is_cached_first_child: bool)
+	pub(crate) fn remove(&mut self, node_pointer: NodePointer, is_cached_first_child: bool)
 	{
 		if unlikely!(is_cached_first_child)
 		{
@@ -98,7 +99,7 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	}
 
 	#[inline(always)]
-	fn insert_memory_address(&mut self, memory_address: MemoryAddress)
+	pub(crate) fn insert_memory_address(&mut self, memory_address: MemoryAddress) -> NodePointer
 	{
 		let cached_first_child = self.cached_first_child();
 
@@ -109,10 +110,11 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 
 		self.tree.insert_memory_address(memory_address);
 		self.debug_assert_cached_first_child_is_valid();
+		memory_address.node_pointer()
 	}
 
 	#[inline(always)]
-	fn cached_first_child(&self) -> NodePointer
+	pub(crate) fn cached_first_child(&self) -> NodePointer
 	{
 		self.cached_first_child
 	}
