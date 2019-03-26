@@ -10,5 +10,4 @@ include!("NodePointer.rs");
 include!("ParentAndColor.rs");
 include!("RedBlackTree.rs");
 include!("Color.rs");
-include!("Cursor.rs");
 include!("RedBlackTreeDoubleEndedIterator.rs");

@@ -9,7 +9,7 @@ include!("LayoutHack.rs");
 include!("logarithm_base2_as_usize.rs");
 include!("non_null_pointer.rs");
 include!("non_zero_u32_difference_as_usize.rs");
-include!("non_zero_u32_right_shift_as_u32.rs");
+include!("non_zero_usize.rs");
 include!("NonNullExt.rs");
 include!("NonNullU8Ext.rs");
 include!("NonZeroU32Ext.rs");

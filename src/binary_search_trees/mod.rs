@@ -32,3 +32,7 @@ use super::*;
 
 
 pub(crate) mod red_black_tree;
+
+
+include!("BinarySearchTreesWithCachedKnowledgeOfFirstChild.rs");
+include!("BinarySearchTreeWithCachedKnowledgeOfFirstChild.rs");

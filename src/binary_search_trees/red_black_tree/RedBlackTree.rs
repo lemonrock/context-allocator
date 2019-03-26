@@ -25,7 +25,7 @@ impl RedBlackTree
 	{
 		Self
 		{
-			root: NodePointer::default(),
+			root: NodePointer::null(),
 		}
 	}
 
@@ -136,10 +136,10 @@ impl RedBlackTree
 	///
 	/// Creating the iterator itself is not efficient.
     #[inline(always)]
-    pub(crate) fn double_ended_range_iterate<'a>(&'a self, minimum: Bound<&MemoryAddress>, maximum: Bound<&MemoryAddress>) -> RedBlackTreeDoubleEndedIterator<'a>
+    pub(crate) fn double_ended_range_iterate<'a>(&'a self, minimum: Bound<MemoryAddress>, maximum: Bound<MemoryAddress>) -> RedBlackTreeDoubleEndedIterator<'a>
     {
-        let lower = self.lower_bound_internal(minimum);
-        let upper = self.upper_bound_internal(maximum);
+        let lower = self.lower_bound(minimum);
+        let upper = self.upper_bound(maximum);
         if likely!(lower.is_not_null() && upper.is_not_null())
 		{
             let lower_key = lower.key();
@@ -273,7 +273,7 @@ impl RedBlackTree
 	#[inline(always)]
 	fn insert_root(&mut self, node: NodePointer)
 	{
-		node.set_parent_and_color(NodePointer::default(), Black);
+		node.set_parent_and_color(NodePointer::default(), Color::Black);
 		node.set_left(NodePointer::default());
 		node.set_right(NodePointer::default());
 		self.root = node;

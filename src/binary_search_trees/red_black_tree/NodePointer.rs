@@ -16,6 +16,12 @@ impl Default for NodePointer
 
 impl NodePointer
 {
+	#[inline(always)]
+	pub(crate) fn from_memory_address(memory_address: MemoryAddress) -> Self
+	{
+		Self(memory_address.cast::<Node>().as_ptr() as *const _)
+	}
+
 	pub(crate) fn furthest_back_contiguous_with(self, block_size: NonZeroUsize) -> MemoryAddress
 	{
 		let mut after = self;
@@ -55,7 +61,7 @@ impl NodePointer
 
 		let before = self;
 
-		before.is_not_null() && before.end_memory_address(block_size) == after
+		before.is_not_null() && before.end_memory_address(block_size) == after.value()
 	}
 
 	#[inline(always)]
@@ -149,9 +155,10 @@ impl NodePointer
 	fn first_child_without_null_check(self) -> Self
 	{
 		let mut x = self;
+		let mut left;
 		while
 		{
-			let left = x.left();
+			left = x.left();
 			likely!(left.is_not_null())
 		}
 		{
@@ -204,9 +211,10 @@ impl NodePointer
 	fn last_child_without_null_check(self) -> Self
 	{
 		let mut x = self;
+		let mut right;
 		while
 		{
-			let right = x.right();
+			right = x.right();
 			likely!(right.is_not_null())
 		}
 		{
@@ -477,9 +485,7 @@ impl NodePointer
 	#[inline(always)]
 	pub(crate) fn insert_left(self, new: Self, root: &mut Self)
 	{
-		new.set_parent_and_color(self, Red);
-		new.set_left(Self::null());
-		new.set_right(Self::null());
+		self.initialize_new(new);
 		self.set_left(new);
 		new.post_insert(root)
 	}
@@ -487,9 +493,7 @@ impl NodePointer
 	#[inline(always)]
 	pub(crate) fn insert_right(self, new: Self, root: &mut Self)
 	{
-		new.set_parent_and_color(self, Red);
-		new.set_left(Self::null());
-		new.set_right(Self::null());
+		self.initialize_new(new);
 		self.set_right(new);
 		new.post_insert(root)
 	}
@@ -538,7 +542,7 @@ impl NodePointer
 			($left_or_right: ident, $x: ident, $x_parent: ident, $x_parent_parent: ident) =>
 			{
 				{
-					let y = x_parent_parent.$left_or_right()
+					let y = $x_parent_parent.$left_or_right();
 
 					if y.is_not_null_and_red()
 					{
@@ -562,13 +566,13 @@ impl NodePointer
 
 		macro_rules! finish_and_return
 		{
-			($x: ident, $root: ident, $rotation1: path, $rotation2: path) =>
+			($x: ident, $x_parent: ident, $root: ident, $rotation1: ident, $rotation2: ident) =>
 			{
 				{
 					let x = if $x.is_not_left_child()
 					{
-						x_parent.$rotation1($root);
-						x_parent
+						$x_parent.$rotation1($root);
+						$x_parent
 					}
 					else
 					{
@@ -591,7 +595,7 @@ impl NodePointer
 		let mut x_parent;
 		while
 		{
-			let x_parent = x.parent();
+			x_parent = x.parent();
 			likely!(x_parent.is_not_null_and_red())
 		}
 		{
@@ -601,13 +605,13 @@ impl NodePointer
 			{
 				deduplicate_continue!(right, x, x_parent, x_parent_parent);
 
-				finish_and_return!(x, root, rotate_left, rotate_right)
+				finish_and_return!(x, x_parent, root, rotate_left, rotate_right)
 			}
 			else
 			{
 				deduplicate_continue!(left, x, x_parent, x_parent_parent);
 
-				finish_and_return!(x, root, rotate_right, rotate_left)
+				finish_and_return!(x, x_parent, root, rotate_right, rotate_left)
 			}
 		}
 	}
@@ -676,6 +680,14 @@ impl NodePointer
 		y.set_right(self);
 
 		self.set_parent(y)
+	}
+
+	#[inline(always)]
+	fn initialize_new(self, new: Self)
+	{
+		new.set_parent_and_color(self, Color::Red);
+		new.set_left(Self::null());
+		new.set_right(Self::null());
 	}
 
 	#[inline(always)]
@@ -759,7 +771,7 @@ impl NodePointer
 	#[inline(always)]
 	fn mutable_node_reference<'a>(self) -> &'a mut Node
 	{
-		self.0.mutable_reference()
+		(self.0 as *mut Node).mutable_reference()
 	}
 
 	#[inline(always)]

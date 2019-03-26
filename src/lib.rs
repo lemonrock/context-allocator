@@ -32,6 +32,7 @@ use ::std::collections::Bound;
 use ::std::collections::Bound::*;
 use ::std::cell::Cell;
 use ::std::cell::UnsafeCell;
+use ::std::cmp::max;
 use ::std::cmp::Ordering;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;

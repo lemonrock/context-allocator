@@ -110,7 +110,7 @@ impl Allocator for BumpAllocator
 
 impl BumpAllocator
 {
-	const MaximumPowerOfTwoAlignment: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(4096) };
+	const MaximumPowerOfTwoAlignment: NonZeroUsize = non_zero_usize(4096);
 
 	/// New instance wrapping a block of memory.
 	#[inline(always)]

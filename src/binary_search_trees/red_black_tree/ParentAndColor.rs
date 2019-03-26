@@ -3,14 +3,14 @@
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ParentAndColor(usize);
+pub(crate) struct ParentAndColor(usize);
 
 impl Default for ParentAndColor
 {
 	#[inline(always)]
 	fn default() -> Self
 	{
-		Self::new(NodePointer::default(), Red)
+		Self::new(NodePointer::default(), Color::Red)
 	}
 }
 

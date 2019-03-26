@@ -3,7 +3,7 @@
 
 
 #[derive(Debug)]
-struct Node
+pub(crate) struct Node
 {
 	left: Cell<NodePointer>,
 	right: Cell<NodePointer>,

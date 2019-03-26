@@ -21,7 +21,7 @@ impl LinkedListAllocator
 	#[inline(always)]
 	pub fn new(memory_starts_at: MemoryAddress, non_zero_memory_size: NonZeroUsize) -> Self
 	{
-		const MaximumAddressableMemory: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(::std::u32::MAX as usize) };
+		const MaximumAddressableMemory: NonZeroUsize = non_zero_usize(::std::u32::MAX as usize);
 		assert!(non_zero_memory_size <= MaximumAddressableMemory, "non_zero_memory_size `{}` exceeds MaximumAddressableMemory (`{}`)", non_zero_memory_size, MaximumAddressableMemory);
 
 		let first_free_block_non_null = memory_starts_at.cast::<FreeBlock>();
@@ -310,9 +310,9 @@ impl FreeBlock
 {
 	const MinimumBlockSize: usize = size_of::<Self>();
 
-	const MinimumAllocationSize: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(Self::MinimumBlockSize) };
+	const MinimumAllocationSize: NonZeroUsize = non_zero_usize(Self::MinimumBlockSize);
 
-	const MaximumAllocationSize: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(size_of::<u32>()) };
+	const MaximumAllocationSize: NonZeroUsize = non_zero_usize(size_of::<u32>()));
 
 	const MinimumAlignment: NonZeroUsize = Self::MinimumAllocationSize;
 

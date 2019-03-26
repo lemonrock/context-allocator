@@ -5,6 +5,12 @@
 pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 {
 	#[inline(always)]
+	fn next_power_of_two(self) -> Self
+	{
+		Self::non_zero_unchecked(self.to_usize().next_power_of_two())
+	}
+
+	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
 	{
 		let power_of_two = non_zero_power_of_two_alignment.get();
@@ -13,6 +19,27 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		debug_assert!(self.checked_add(power_of_two_less_one).is_some(), "non_zero_power_of_two_alignment is far too close to the maximum value of a pointer");
 
 		Self::non_zero(self.add(power_of_two_less_one).to_usize() & !power_of_two_less_one)
+	}
+
+	#[inline(always)]
+	fn divide_power_of_two_by_power_of_two(self, divisor: NonZeroUsize) -> usize
+	{
+		debug_assert!(self.is_power_of_two(), "self `{:?}` is not a power of two", self);
+		debug_assert!(divisor.is_power_of_two(), "divisor `{:?}` is not a power of two", divisor);
+
+		self.to_usize() >> divisor.logarithm_base2()
+	}
+
+	#[inline(always)]
+	fn is_power_of_two(self) -> bool
+	{
+		self.to_usize().is_power_of_two()
+	}
+
+	#[inline(always)]
+	fn logarithm_base2(self) -> usize
+	{
+		self.to_usize().trailing_zeros() as usize
 	}
 
 	#[inline(always)]
@@ -88,6 +115,6 @@ impl NonZeroUsizeExt for NonZeroUsize
 	#[inline(always)]
 	fn non_zero_unchecked(value: usize) -> Self
 	{
-		unsafe { NonZeroUsize::new_unchecked(value) }
+		non_zero_usize(value)
 	}
 }

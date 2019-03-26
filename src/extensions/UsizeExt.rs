@@ -11,24 +11,9 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
-	fn logarithm_base2(self) -> usize
+	fn non_zero(self) -> NonZeroUsize
 	{
-		self.to_usize().trailing_zeros()
-	}
-
-	#[inline(always)]
-	fn divide_power_of_two_by_power_of_two(self, divisor: usize) -> usize
-	{
-		debug_assert!(self.is_power_of_two(), "self `{}` is not a power of two", self);
-		debug_assert!(divisor.is_power_of_two(), "divisor `{}` is not a power of two", divisor);
-
-		self.to_usize() >> divisor.logarithm_base2()
-	}
-
-	#[inline(always)]
-	fn non_zero(value: usize) -> Self
-	{
-		NonZeroUsize::non_zero(value)
+		NonZeroUsize::non_zero(self.to_usize())
 	}
 
 	#[doc(hidden)]

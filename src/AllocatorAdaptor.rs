@@ -229,7 +229,7 @@ impl<A: Allocator> AllocatorAdaptor<A>
 			return Ok(A::ZeroSizedAllocation)
 		}
 
-		let non_zero_size = unsafe { NonZeroUsize::new_unchecked(layout.size_) };
+		let non_zero_size = layout.size_.non_zero();
 		let result = self.mutable_allocator().allocate(non_zero_size, layout.align_);
 
 		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
@@ -260,19 +260,19 @@ impl<A: Allocator> AllocatorAdaptor<A>
 
 		if likely!(new_size > current_size)
 		{
-			let non_zero_new_size = unsafe { NonZeroUsize::new_unchecked(new_size) };
+			let non_zero_new_size = new_size.non_zero();
 
 			if unlikely!(current_size == 0)
 			{
 				return self.mutable_allocator().allocate(non_zero_new_size, non_zero_power_of_two_alignment)
 			}
 
-			let non_zero_current_size = unsafe { NonZeroUsize::new_unchecked(current_size) };
+			let non_zero_current_size = current_size.non_zero();
 			self.mutable_allocator().growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 		}
 		else
 		{
-			let non_zero_current_size = unsafe { NonZeroUsize::new_unchecked(current_size) };
+			let non_zero_current_size = current_size.non_zero();
 
 			if unlikely!(new_size == 0)
 			{
@@ -280,7 +280,7 @@ impl<A: Allocator> AllocatorAdaptor<A>
 				return Ok(A::ZeroSizedAllocation)
 			}
 
-			let non_zero_new_size = unsafe { NonZeroUsize::new_unchecked(new_size) };
+			let non_zero_new_size = new_size.non_zero();
 			self.mutable_allocator().shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 		}
 	}

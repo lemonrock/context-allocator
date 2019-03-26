@@ -70,13 +70,13 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn read<V: Copy>(&self) -> V
 	{
-		unsafe { (self.to_usize() as *const V).read() }
+		unsafe { (self.to_pointer() as *const V).read() }
 	}
 
 	#[inline(always)]
 	fn write<V: Copy>(&mut self, value: V)
 	{
-		unsafe { (self.to_usize() as *mut V).write(value) }
+		unsafe { (self.to_pointer() as *mut V).write(value) }
 	}
 
 	#[inline(always)]
@@ -89,7 +89,7 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn or_u8(self, bits_to_set: u8)
 	{
-		let pointer = self.to_usize() as *mut u8;
+		let pointer = self.to_pointer();
 		let current_value = unsafe { *pointer };
 		unsafe { *pointer = current_value | bits_to_set }
 	}
@@ -103,8 +103,18 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn node_pointer(self) -> NodePointer
 	{
-		NodePointer(self.as_ptr() as *mut Node as *const _)
+		NodePointer::from_memory_address(self.to_non_null_u8())
 	}
+
+	#[doc(hidden)]
+	#[inline(always)]
+	fn to_pointer(self) -> *mut u8
+	{
+		self.to_non_null_u8().as_ptr()
+	}
+
+	#[doc(hidden)]
+	fn to_non_null_u8(self) -> NonNull<u8>;
 
 	#[doc(hidden)]
 	fn to_usize(self) -> usize;
@@ -115,6 +125,12 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 
 impl NonNullU8Ext for MemoryAddress
 {
+	#[inline(always)]
+	fn to_non_null_u8(self) -> NonNull<u8>
+	{
+		self
+	}
+
 	#[inline(always)]
 	fn to_usize(self) -> usize
 	{

@@ -3,7 +3,7 @@
 
 
 #[inline(always)]
-pub(crate) const fn non_zero_u32_right_shift_as_u32(value: NonZeroU32, right_shift: NonZeroU32) -> u32
+pub(crate) const fn non_zero_usize(value: usize) -> NonZeroUsize
 {
-	value.get() >> right_shift.get()
+	unsafe { NonZeroUsize::new_unchecked(value) }
 }

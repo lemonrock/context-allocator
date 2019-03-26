@@ -4,7 +4,7 @@
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(usize)]
-enum Color
+pub(crate) enum Color
 {
 	Red = 0,
 
