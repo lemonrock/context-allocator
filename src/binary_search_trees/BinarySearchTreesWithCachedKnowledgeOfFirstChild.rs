@@ -8,6 +8,18 @@ pub(crate) struct BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two: [BinarySearchTreeWithCachedKnowledgeOfFirstChild; Self::NumberOfBinarySearchTrees],
 }
 
+impl Default for BinarySearchTreesWithCachedKnowledgeOfFirstChild
+{
+	#[inline(always)]
+	fn default() -> Self
+	{
+		Self
+		{
+			binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two: Default::default(),
+		}
+	}
+}
+
 impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 {
 	const SmallestInclusivePowerOfTwoExponent: NonZeroUsize = Self::logarithm_base2(size_of::<Node>());

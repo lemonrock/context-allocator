@@ -10,6 +10,15 @@
 #[derive(Debug)]
 pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
 
+impl Default for MultipleBinarySearchTreeAllocator
+{
+	#[inline(always)]
+	fn default() -> Self
+	{
+		Self(BinarySearchTreesWithCachedKnowledgeOfFirstChild::default())
+	}
+}
+
 impl Allocator for MultipleBinarySearchTreeAllocator
 {
 	#[inline(always)]
@@ -259,5 +268,21 @@ impl MultipleBinarySearchTreeAllocator
 	fn binary_search_tree_for(&mut self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		self.0.binary_search_tree_for(binary_search_tree_index)
+	}
+}
+
+#[cfg(test)]
+mod MultipleBinarySearchTreeAllocatorTests
+{
+	use super::*;
+
+	#[test]
+	pub fn x()
+	{
+		let mut allocator = MultipleBinarySearchTreeAllocator::default();
+
+		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
+
+		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
 	}
 }
