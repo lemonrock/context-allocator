@@ -41,4 +41,74 @@ pub trait Allocator: Debug + Sized
 	{
 		unsafe { transmute(self) }
 	}
+
+	#[doc(hidden)]
+	#[inline(always)]
+	fn allocate_zeroed(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	{
+		let layout = LayoutHack::access_private_fields(layout);
+
+		let zero_size = layout.size_;
+
+		if unlikely!(zero_size == 0)
+		{
+			return Ok(Self::ZeroSizedAllocation)
+		}
+
+		let non_zero_size = layout.size_.non_zero();
+		let result = self.allocate(non_zero_size, layout.align_);
+
+		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
+		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
+		let pointer = unsafe { transmute::<_, *mut u8>(result) };
+
+		if likely!(!pointer.is_null())
+		{
+			unsafe { pointer.write_bytes(0x00, zero_size) };
+		}
+
+		unsafe { transmute(pointer) }
+	}
+
+	#[doc(hidden)]
+	#[inline(always)]
+	fn reallocate(&self, current_memory: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	{
+		let layout = LayoutHack::access_private_fields(layout);
+
+		let current_size = layout.size_;
+
+		if unlikely!(current_size == new_size)
+		{
+			return Ok(current_memory)
+		}
+
+		let non_zero_power_of_two_alignment = layout.align_;
+
+		if likely!(new_size > current_size)
+		{
+			let non_zero_new_size = new_size.non_zero();
+
+			if unlikely!(current_size == 0)
+			{
+				return self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)
+			}
+
+			let non_zero_current_size = current_size.non_zero();
+			self.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+		}
+		else
+		{
+			let non_zero_current_size = current_size.non_zero();
+
+			if unlikely!(new_size == 0)
+			{
+				self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
+				return Ok(Self::ZeroSizedAllocation)
+			}
+
+			let non_zero_new_size = new_size.non_zero();
+			self.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+		}
+	}
 }

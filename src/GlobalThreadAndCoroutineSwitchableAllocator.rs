@@ -17,6 +17,23 @@ pub struct GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator: 
 #[thread_local] static mut coroutine_local_allocator_state: AllocatorState = AllocatorState::new("coroutine local");
 #[thread_local] static mut thread_local_allocator_state: AllocatorState = AllocatorState::new("thread local");
 
+use ::std::alloc::System;
+static GLOBAL: AllocatorAdaptor<GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator, BumpAllocator, GlobalAllocToAllocatorAdaptor<System>>> =
+{
+	static X: GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator, BumpAllocator, GlobalAllocToAllocatorAdaptor<System>> = GlobalThreadAndCoroutineSwitchableAllocator
+	{
+		global_allocator: GlobalAllocToAllocatorAdaptor(System),
+		marker: PhantomData,
+	};
+
+	AllocatorAdaptor(&X)
+};
+
+unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+{
+}
+
+
 impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	#[inline(always)]
