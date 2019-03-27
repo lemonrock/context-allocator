@@ -45,6 +45,7 @@ use ::std::mem::size_of;
 use ::std::mem::transmute;
 use ::std::num::NonZeroU32;
 use ::std::num::NonZeroUsize;
+use ::std::ops::Deref;
 use ::std::ptr::NonNull;
 use ::std::ptr::null;
 use ::std::ptr::null_mut;

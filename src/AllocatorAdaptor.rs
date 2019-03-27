@@ -7,6 +7,17 @@
 #[derive(Debug)]
 pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(&'a A);
 
+impl<'a, A: 'a + Allocator> Deref for AllocatorAdaptor<'a, A>
+{
+	type Target = A;
+
+	#[inline(always)]
+	fn deref(&self) -> &Self::Target
+	{
+		self.0
+	}
+}
+
 unsafe impl<'a, A: 'a + Allocator> GlobalAlloc for AllocatorAdaptor<'a, A>
 {
 	#[inline(always)]
