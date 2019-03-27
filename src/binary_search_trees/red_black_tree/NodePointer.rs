@@ -28,7 +28,13 @@ impl NodePointer
 		let mut before = self.previous();
 		loop
 		{
-			if unlikely!(before.is_contiguous_before(after, block_size))
+			#[inline(always)]
+			fn is_contiguous(before: NodePointer, after: NodePointer, block_size: NonZeroUsize) -> bool
+			{
+				before.is_not_null() && before.end_memory_address(block_size) == after.value()
+			}
+
+			if unlikely!(is_contiguous(before, after, block_size))
 			{
 				after = before;
 				before = before.previous();
@@ -44,7 +50,13 @@ impl NodePointer
 		let mut after = self.next();
 		loop
 		{
-			if unlikely!(before.is_contiguous_before(after, block_size))
+			#[inline(always)]
+			fn is_contiguous(before: NodePointer, after: NodePointer, block_size: NonZeroUsize) -> bool
+			{
+				after.is_not_null() && after.value() == before.end_memory_address(block_size)
+			}
+
+			if unlikely!(is_contiguous(before, after, block_size))
 			{
 				before = after;
 				after = after.next();
@@ -52,16 +64,6 @@ impl NodePointer
 			}
 			break before.value()
 		}
-	}
-
-	#[inline(always)]
-	fn is_contiguous_before(self, after: Self, block_size: NonZeroUsize) -> bool
-	{
-		debug_assert!(after.is_not_null(), "after must not be null");
-
-		let before = self;
-
-		before.is_not_null() && before.end_memory_address(block_size) == after.value()
 	}
 
 	#[inline(always)]
@@ -526,81 +528,77 @@ impl NodePointer
 	/// This code is based on the red-black tree implementation in libc++.
 	fn post_insert(self, root: &mut Self)
 	{
-		macro_rules! deduplicate_continue
+		let mut x = self;
+
+		while x.parent().is_not_null_and_red()
 		{
-			($left_or_right: ident, $x: ident, $x_parent: ident, $x_parent_parent: ident) =>
+			if x.parent().is_left_child()
 			{
+				let y = x.parent().parent().right();
+
+				if y.is_not_null_and_red()
 				{
-					let y = $x_parent_parent.$left_or_right();
-
-					if y.is_not_null_and_red()
+					x = x.parent();
+					x.set_black();
+					x = x.parent();
+					if x.parent().is_null()
 					{
-						$x_parent.set_black();
-						if $x_parent_parent.parent().is_null()
-						{
-							$x_parent_parent.set_black();
-						}
-						else
-						{
-							$x_parent_parent.set_red();
-						}
-						y.set_black();
-
-						$x = $x_parent_parent;
-						continue
-					}
-				}
-			}
-		}
-
-		macro_rules! finish_and_return
-		{
-			($x: ident, $x_parent: ident, $root: ident, $rotation1: ident, $rotation2: ident) =>
-			{
-				{
-					let x = if $x.is_not_left_child()
-					{
-						$x_parent.$rotation1($root);
-						$x_parent
+						x.set_black();
 					}
 					else
 					{
-						$x
-					};
-
-					let x_parent = x.parent();
-					x_parent.set_black();
-
-					let x_parent_parent = x_parent.parent();
-					x_parent_parent.set_red();
-					x_parent_parent.$rotation2($root);
-
-					return
+						x.set_red();
+					}
+					y.set_black();
 				}
-			}
-		}
-
-		let mut x = self;
-		let mut x_parent;
-		while
-		{
-			x_parent = x.parent();
-			likely!(x_parent.is_not_null_and_red())
-		}
-		{
-			let x_parent_parent = x_parent.parent();
-
-			if x_parent.is_left_child()
-			{
-				deduplicate_continue!(right, x, x_parent, x_parent_parent);
-
-				finish_and_return!(x, x_parent, root, rotate_left, rotate_right)
+				else
+				{
+					if !x.is_left_child()
+					{
+						x = x.parent();
+						x.rotate_left(root);
+					}
+					x = x.parent();
+					x.set_black();
+					x = x.parent();
+					x.set_red();
+					x.rotate_right(root);
+					break;
+				}
 			}
 			else
 			{
-				deduplicate_continue!(left, x, x_parent, x_parent_parent);
+				let y = x.parent().parent().left();
 
-				finish_and_return!(x, x_parent, root, rotate_right, rotate_left)
+				if y.is_not_null_and_red()
+				{
+					x = x.parent();
+					x.set_black();
+					x = x.parent();
+					if x.parent().is_null()
+					{
+						x.set_black();
+					}
+					else
+					{
+						x.set_red();
+					}
+					y.set_black();
+				}
+				else
+				{
+					if x.is_left_child()
+					{
+						x = x.parent();
+						x.rotate_right(root);
+					}
+					x = x.parent();
+					x.set_black();
+					x = x.parent();
+					x.set_red();
+					x.rotate_left(root);
+					break;
+				}
 			}
 		}
 	}

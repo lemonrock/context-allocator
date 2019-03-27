@@ -7,12 +7,7 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
 	{
-		let power_of_two = non_zero_power_of_two_alignment.get();
-		let power_of_two_less_one = power_of_two - 1;
-
-		debug_assert!(self.checked_add(power_of_two_less_one).is_some(), "non_zero_power_of_two_alignment is far too close to the maximum value of a pointer");
-
-		Self::from_usize(self.add(power_of_two_less_one).to_usize() & !power_of_two_less_one)
+		Self::from_usize(self.to_usize().non_zero().round_up_to_power_of_two(non_zero_power_of_two_alignment).to_usize())
 	}
 
 	#[inline(always)]
@@ -97,7 +92,10 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn is_aligned_to(self, non_zero_power_of_two_alignment: NonZeroUsize) -> bool
 	{
-		self.to_usize() & (non_zero_power_of_two_alignment.get() - 1) == 0
+		let value = self.to_usize();
+		let bitmask = non_zero_power_of_two_alignment.get() - 1;
+
+		value & bitmask == 0
 	}
 
 	#[inline(always)]

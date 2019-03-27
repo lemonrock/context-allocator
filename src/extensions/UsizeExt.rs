@@ -11,6 +11,15 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn round_down_to_power_of_two(self, power_of_two: NonZeroUsize) -> usize
+	{
+		let value = self.to_usize();
+		let power_of_two_exponent = power_of_two.logarithm_base2();
+
+		value & !((1 << power_of_two_exponent) - 1)
+	}
+
+	#[inline(always)]
 	fn non_zero(self) -> NonZeroUsize
 	{
 		NonZeroUsize::non_zero(self.to_usize())

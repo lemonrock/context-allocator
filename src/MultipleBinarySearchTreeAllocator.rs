@@ -7,8 +7,16 @@
 /// Each sorted list contains a different block size.
 ///
 /// Block sizes are powers of 2; the smallest is currently 16.
-#[derive(Debug)]
 pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
+
+impl Debug for MultipleBinarySearchTreeAllocator
+{
+	#[inline(always)]
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result
+	{
+		self.0.fmt(f)
+	}
+}
 
 impl Default for MultipleBinarySearchTreeAllocator
 {
@@ -26,14 +34,14 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	{
 		macro_rules! try_to_allocate_exact_size_block
 		{
-			($node_pointer: ident, $is_original_first_child: expr, $non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $_block_size: ident, $_exact_block_size: ident, $_self: ident) =>
+			($node_pointer: ident, $is_cached_first_child: expr, $non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $_block_size: ident, $_exact_block_size: ident, $_self: ident) =>
 			{
 				{
 					let memory_address = $node_pointer.value();
 
 					if likely!(memory_address.is_aligned_to($non_zero_power_of_two_alignment))
 					{
-						$binary_search_tree.remove($node_pointer, $is_original_first_child);
+						$binary_search_tree.remove($node_pointer, $is_cached_first_child);
 
 						return Ok(memory_address)
 					}
@@ -43,7 +51,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		
 		macro_rules! try_to_allocate_larger_sized_block
 		{
-			($node_pointer: ident, $is_original_first_child: expr, $floored_non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $block_size: ident, $exact_block_size: ident, $self: ident) =>
+			($node_pointer: ident, $is_cached_first_child: expr, $floored_non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $block_size: ident, $exact_block_size: ident, $self: ident) =>
 			{
 				{
 					let start_memory_address = $node_pointer.value();
@@ -53,7 +61,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 					{
 						if likely!(memory_address.is_aligned_to($floored_non_zero_power_of_two_alignment))
 						{
-							$binary_search_tree.remove($node_pointer, $is_original_first_child);
+							$binary_search_tree.remove($node_pointer, $is_cached_first_child);
 
 							// Block(s) at front.
 							$self.split_up_block(start_memory_address, memory_address);
@@ -84,7 +92,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 					{
 						$callback!(original_first_child, true, $non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
 
-						let mut node_pointer = original_first_child;
+						let mut node_pointer = original_first_child.next();
 						while likely!(node_pointer.is_not_null())
 						{
 							$callback!(node_pointer, false, $non_zero_power_of_two_alignment, binary_search_tree, $block_size, $exact_block_size, $self);
@@ -106,7 +114,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		}
 
 		// (1) Try to satisfy allocation from a binary search tree of blocks of the same size.
-		let binary_search_tree_index_for_blocks_of_exact_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(non_zero_size);
+		let binary_search_tree_index_for_blocks_of_exact_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(Self::block_size(non_zero_size));
 		#[allow(dead_code)] const Unused: () = ();
 		try_to_satisfy_allocation!(try_to_allocate_exact_size_block, binary_search_tree_index_for_blocks_of_exact_size, non_zero_power_of_two_alignment, Unused, Unused, Unused);
 
@@ -129,6 +137,14 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		let block_size = Self::block_size(non_zero_size);
 
 		let binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(block_size);
+		#[cfg(debug_assertions)]
+		{
+			if block_size.get() > 32
+			{
+				debug_assert_ne!(binary_search_tree_index, 0, "WTF?")
+			}
+		}
+
 		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
 		let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
 		let has_blocks = binary_search_tree.has_blocks();
@@ -156,7 +172,7 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
 	{
 		let difference = non_zero_new_size.difference(non_zero_current_size);
-		debug_assert_ne!(difference, 0, "Should never be called with no difference");
+		debug_assert_ne!(difference, 0, "Should never be called with a zero difference");
 
 		let old_block_size = Self::block_size(non_zero_current_size);
 		let new_block_size = Self::block_size(non_zero_new_size);
@@ -193,6 +209,57 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 
 impl MultipleBinarySearchTreeAllocator
 {
+	/// Calling this more than once is legal (but odd; blocks will not be coalesced), but calling it more than once with overlapping slices is not.
+	///
+	/// If the provided memory's length is not a multiple of 2, then the remainder is unused.
+	///
+	/// The provided memory must be at least as long as the minimum block size.
+	///
+	/// The memory must be aligned to `BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment`, which is the same as the size of a `Node`.
+	#[inline(always)]
+	pub fn make_use_of(&mut self, memory: &mut [u8])
+	{
+		let mut size = memory.len();
+		debug_assert_ne!(size, 0, "size can not be zero");
+
+		let mut memory_address = memory.as_mut_ptr().non_null();
+		debug_assert!(memory_address.is_aligned_to(BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment), "memory is not aligned to `{:?}`", BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment);
+
+		debug_assert_ne!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees, 0, "There must be at least one binary search stree");
+		let mut last_binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees;
+		while likely!(last_binary_search_tree_index > 0)
+		{
+			let binary_search_tree_index = last_binary_search_tree_index - 1;
+
+			let block_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index_to_block_size(binary_search_tree_index);
+
+			if unlikely!(size < block_size)
+			{
+				if unlikely!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::size_is_less_than_minimum_allocation_size(size))
+				{
+					break
+				}
+
+				last_binary_search_tree_index = binary_search_tree_index;
+				continue
+			}
+
+			let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
+			while
+			{
+				binary_search_tree.insert_memory_address(memory_address);
+
+				memory_address.add_assign(block_size);
+				size -= block_size;
+
+				likely!(size >= block_size)
+			}
+			{
+			}
+			last_binary_search_tree_index = binary_search_tree_index;
+		}
+	}
+
 	#[inline(always)]
 	fn split_up_block(&mut self, mut from: MemoryAddress, to: MemoryAddress)
 	{
@@ -275,14 +342,65 @@ impl MultipleBinarySearchTreeAllocator
 mod MultipleBinarySearchTreeAllocatorTests
 {
 	use super::*;
+	use ::std::alloc::Global;
+	use :: std::slice::from_raw_parts_mut;
 
 	#[test]
-	pub fn x()
+	pub fn exercise()
 	{
-		let mut allocator = MultipleBinarySearchTreeAllocator::default();
+		test_repeated_small_allocations(32);
+		test_repeated_small_allocations(64);
+		test_repeated_small_allocations(96);
+		test_repeated_small_allocations(128);
+		test_repeated_small_allocations(160);
+		test_repeated_small_allocations(192);
+		test_repeated_small_allocations(256);
+
+		// TODO: Optimization - split_blocks calls deallocate with a block size; deallocate then computes the same block_size.
 
 		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
 
 		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
 	}
+
+	fn test_repeated_small_allocations(memory_size: usize)
+	{
+		let (mut allocator, memory) = new_allocator(memory_size);
+
+		for allocation_loop_count in 0 .. memory_size / SmallestAllocation
+		{
+			let _ = allocator.allocate(1usize.non_zero(), 1usize.non_zero()).expect(&format!("Did not allocate for loop `{}`", allocation_loop_count));
+		}
+
+		destroy_memory(memory)
+	}
+
+	fn new_allocator<'a>(memory_size: usize) -> (MultipleBinarySearchTreeAllocator, (Layout, &'a mut [u8]))
+	{
+		let mut allocator = MultipleBinarySearchTreeAllocator::default();
+
+		let (some_memory, layout) = unsafe
+		{
+			let layout = layout(memory_size);
+			let memory_address = Global.alloc(layout).unwrap();
+			let some_memory = from_raw_parts_mut(memory_address.as_ptr(), memory_size);
+			(some_memory, layout)
+		};
+
+		allocator.make_use_of(some_memory);
+
+		(allocator, (layout, some_memory))
+	}
+
+	fn destroy_memory((layout, some_memory): (Layout, &mut [u8]))
+	{
+		unsafe { Global.dealloc(some_memory.as_ptr().non_null(), layout) };
+	}
+
+	unsafe fn layout(memory_size: usize) -> Layout
+	{
+		Layout::from_size_align_unchecked(memory_size, SmallestAllocation)
+	}
+
+	const SmallestAllocation: usize = BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAllocationSize.get();
 }

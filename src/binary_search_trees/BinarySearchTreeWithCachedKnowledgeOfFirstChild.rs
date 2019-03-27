@@ -91,7 +91,6 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 		if unlikely!(is_cached_first_child)
 		{
 			self.update_cached_first_child(node_pointer.next());
-			self.debug_assert_cached_first_child_is_valid();
 		}
 
 		self.tree.remove_node_pointer(node_pointer);
@@ -114,6 +113,12 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	}
 
 	#[inline(always)]
+	pub(crate) fn double_ended_iterate<'a>(&'a self) -> RedBlackTreeDoubleEndedIterator<'a>
+	{
+		self.tree.double_ended_iterate()
+	}
+
+	#[inline(always)]
 	pub(crate) fn cached_first_child(&self) -> NodePointer
 	{
 		self.cached_first_child
@@ -128,6 +133,6 @@ impl BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	#[inline(always)]
 	fn debug_assert_cached_first_child_is_valid(&self)
 	{
-		debug_assert_eq!(self.cached_first_child, self.tree.first_child(), "Assumption invalid");
+		debug_assert_eq!(self.cached_first_child, self.tree.first_child(), "First child is not valid");
 	}
 }
