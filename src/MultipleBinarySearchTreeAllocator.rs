@@ -343,10 +343,10 @@ mod MultipleBinarySearchTreeAllocatorTests
 {
 	use super::*;
 	use ::std::alloc::Global;
-	use :: std::slice::from_raw_parts_mut;
+	use ::std::slice::from_raw_parts_mut;
 
 	#[test]
-	pub fn exercise()
+	pub fn repeated_small_allocations()
 	{
 		test_repeated_small_allocations(32);
 		test_repeated_small_allocations(64);
@@ -363,16 +363,36 @@ mod MultipleBinarySearchTreeAllocatorTests
 		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
 	}
 
+	#[test]
+	pub fn mixed_allocations()
+	{
+		let (mut allocator, memory) = new_allocator(256);
+		
+		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		allocator.allocate(128.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		assert_allocator_is_empty(&mut allocator);
+
+		destroy_memory(memory)
+	}
+
 	fn test_repeated_small_allocations(memory_size: usize)
 	{
 		let (mut allocator, memory) = new_allocator(memory_size);
 
 		for allocation_loop_count in 0 .. memory_size / SmallestAllocation
 		{
-			let _ = allocator.allocate(1usize.non_zero(), 1usize.non_zero()).expect(&format!("Did not allocate for loop `{}`", allocation_loop_count));
+			let _ = allocator.allocate(1.non_zero(), 1.non_zero()).expect(&format!("Did not allocate for loop `{}`", allocation_loop_count));
 		}
+		assert_allocator_is_empty(&mut allocator);
 
 		destroy_memory(memory)
+	}
+
+	fn assert_allocator_is_empty(allocator: &mut MultipleBinarySearchTreeAllocator)
+	{
+		assert_eq!(allocator.allocate(1.non_zero(), 1.non_zero()), Err(AllocErr), "Allocator was not empty");
 	}
 
 	fn new_allocator<'a>(memory_size: usize) -> (MultipleBinarySearchTreeAllocator, (Layout, &'a mut [u8]))
