@@ -13,6 +13,17 @@ impl<GA: GlobalAlloc> Debug for GlobalAllocToAllocatorAdaptor<GA>
 	}
 }
 
+impl<GA: GlobalAlloc> Deref for GlobalAllocToAllocatorAdaptor<GA>
+{
+	type Target = GA;
+
+	#[inline(always)]
+	fn deref(&self) -> &Self::Target
+	{
+		&self.0
+	}
+}
+
 impl<GA: GlobalAlloc> Allocator for GlobalAllocToAllocatorAdaptor<GA>
 {
 	#[inline(always)]

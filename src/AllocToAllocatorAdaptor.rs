@@ -13,6 +13,17 @@ impl<A: Alloc> Debug for AllocToAllocatorAdaptor<A>
 	}
 }
 
+impl<A: Alloc> Deref for AllocToAllocatorAdaptor<A>
+{
+	type Target = A;
+
+	#[inline(always)]
+	fn deref(&self) -> &Self::Target
+	{
+		self.0.get().reference()
+	}
+}
+
 impl<A: Alloc> Allocator for AllocToAllocatorAdaptor<A>
 {
 	#[inline(always)]
