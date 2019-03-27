@@ -20,3 +20,9 @@ version = "0.0.0"
 
 [dependencies]
 likely = "^0.1.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "^0.2.50"
+
+[target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
+syscall-alt = "^0.0.14"

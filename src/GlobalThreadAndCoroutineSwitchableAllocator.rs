@@ -33,7 +33,6 @@ unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator,
 {
 }
 
-
 impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	#[inline(always)]
