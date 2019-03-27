@@ -10,6 +10,7 @@
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
 #![feature(core_intrinsics)]
+#![feature(thread_local)]
 
 
 //! #context-allocator
@@ -38,8 +39,7 @@ use ::std::cmp::Ordering;
 use ::std::fmt;
 use ::std::fmt::Debug;
 use ::std::fmt::Formatter;
-use ::std::hash::Hash;
-use ::std::hash::Hasher;
+use ::std::marker::PhantomData;
 use ::std::mem::align_of;
 use ::std::mem::size_of;
 use ::std::mem::transmute;
@@ -52,8 +52,14 @@ use ::std::ptr::null_mut;
 
 include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
+include!("AllocatorState.rs");
+include!("AllocToAllocatorAdaptor.rs");
 include!("BumpAllocator.rs");
+include!("CurrentAllocatorInUse.rs");
+include!("GlobalAllocToAllocatorAdaptor.rs");
+include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
 include!("MemoryAddress.rs");
+include!("MemoryRange.rs");
 include!("MultipleBinarySearchTreeAllocator.rs");
 
 

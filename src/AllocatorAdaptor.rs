@@ -2,62 +2,12 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// Provides implementations of `GlobalAlloc` and `Alloc` by adapting implementations of `Allocator`.
-///
-/// Equality is simply reference equality.
+/// Adapts an `Allocator` to the `GlobalAlloc` and `Alloc` traits.
+#[repr(transparent)]
 #[derive(Debug)]
-pub struct AllocatorAdaptor<A: Allocator>(UnsafeCell<A>);
+pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(&'a A);
 
-impl<A: Allocator> PartialEq for AllocatorAdaptor<A>
-{
-	#[inline(always)]
-	fn eq(&self, other: &Self) -> bool
-	{
-		self.0.get() == other.0.get()
-	}
-}
-
-impl<A: Allocator + Default> Default for AllocatorAdaptor<A>
-{
-	#[inline(always)]
-	fn default() -> Self
-	{
-		Self(UnsafeCell::new(A::default()))
-	}
-}
-
-impl<A: Allocator> Eq for AllocatorAdaptor<A>
-{
-}
-
-impl<A: Allocator> PartialOrd for AllocatorAdaptor<A>
-{
-	#[inline(always)]
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering>
-	{
-		Some(self.cmp(other))
-	}
-}
-
-impl<A: Allocator> Ord for AllocatorAdaptor<A>
-{
-	#[inline(always)]
-	fn cmp(&self, other: &Self) -> Ordering
-	{
-		self.0.get().cmp(&other.0.get())
-	}
-}
-
-impl<A: Allocator> Hash for AllocatorAdaptor<A>
-{
-	#[inline(always)]
-	fn hash<H: Hasher>(&self, state: &mut H)
-	{
-		self.0.get().hash(state)
-	}
-}
-
-unsafe impl<A: Allocator> GlobalAlloc for AllocatorAdaptor<A>
+unsafe impl<'a, A: 'a + Allocator> GlobalAlloc for AllocatorAdaptor<'a, A>
 {
 	#[inline(always)]
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8
@@ -72,7 +22,7 @@ unsafe impl<A: Allocator> GlobalAlloc for AllocatorAdaptor<A>
 		}
 
 		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
-		transmute(self.mutable_allocator().allocate(non_zero_size, layout.align_))
+		transmute(self.allocate(non_zero_size, layout.align_))
 	}
 
 	#[inline(always)]
@@ -99,7 +49,7 @@ unsafe impl<A: Allocator> GlobalAlloc for AllocatorAdaptor<A>
 
 		let current_memory = NonNull::new_unchecked(ptr);
 
-		self.mutable_allocator().deallocate(non_zero_size,layout.align_, current_memory)
+		self.deallocate(non_zero_size,layout.align_, current_memory)
 	}
 
 	#[inline(always)]
@@ -111,7 +61,7 @@ unsafe impl<A: Allocator> GlobalAlloc for AllocatorAdaptor<A>
     }
 }
 
-unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
+unsafe impl<'a, A: 'a + Allocator> Alloc for AllocatorAdaptor<'a, A>
 {
 	#[inline(always)]
 	unsafe fn alloc(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
@@ -122,7 +72,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 			return Ok(A::ZeroSizedAllocation)
 		}
 		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
-		self.mutable_allocator().allocate(non_zero_size, layout.align_)
+		self.allocate(non_zero_size, layout.align_)
 	}
 
 	#[inline(always)]
@@ -143,7 +93,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 		debug_assert_ne!(layout.size_, 0, "It should not be possible for a `layout.size_` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
 
 		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
-		self.mutable_allocator().deallocate(non_zero_size, layout.align_, ptr)
+		self.deallocate(non_zero_size, layout.align_, ptr)
 	}
 
 	#[inline(always)]
@@ -163,7 +113,7 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
 		let size = layout.size_;
 		let non_zero_size = NonZeroUsize::new_unchecked(size);
 
-		let result = self.mutable_allocator().allocate(non_zero_size, layout.align_);
+		let result = self.allocate(non_zero_size, layout.align_);
 
 		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
 		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
@@ -215,8 +165,36 @@ unsafe impl<A: Allocator> Alloc for AllocatorAdaptor<A>
     }
 }
 
-impl<A: Allocator> AllocatorAdaptor<A>
+impl<'a, A: 'a + Allocator> Allocator for AllocatorAdaptor<'a, A>
 {
+	#[inline(always)]
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	{
+		self.0.allocate(non_zero_size, non_zero_power_of_two_alignment)
+	}
+
+	#[inline(always)]
+	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	{
+		self.0.deallocate(non_zero_size, non_zero_power_of_two_alignment, current_memory)
+	}
+
+	#[inline(always)]
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	{
+		self.0.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+	}
+
+	#[inline(always)]
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	{
+		self.0.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+	}
+}
+
+impl<'a, A: 'a + Allocator> AllocatorAdaptor<'a, A>
+{
+	#[doc(hidden)]
 	#[inline(always)]
 	fn allocate_zeroed(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
@@ -226,11 +204,11 @@ impl<A: Allocator> AllocatorAdaptor<A>
 
 		if unlikely!(zero_size == 0)
 		{
-			return Ok(A::ZeroSizedAllocation)
+			return Ok(Self::ZeroSizedAllocation)
 		}
 
 		let non_zero_size = layout.size_.non_zero();
-		let result = self.mutable_allocator().allocate(non_zero_size, layout.align_);
+		let result = self.allocate(non_zero_size, layout.align_);
 
 		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
 		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
@@ -244,6 +222,7 @@ impl<A: Allocator> AllocatorAdaptor<A>
 		unsafe { transmute(pointer) }
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn reallocate(&self, current_memory: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
@@ -264,11 +243,11 @@ impl<A: Allocator> AllocatorAdaptor<A>
 
 			if unlikely!(current_size == 0)
 			{
-				return self.mutable_allocator().allocate(non_zero_new_size, non_zero_power_of_two_alignment)
+				return self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)
 			}
 
 			let non_zero_current_size = current_size.non_zero();
-			self.mutable_allocator().growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+			self.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 		}
 		else
 		{
@@ -276,18 +255,12 @@ impl<A: Allocator> AllocatorAdaptor<A>
 
 			if unlikely!(new_size == 0)
 			{
-				self.mutable_allocator().deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
-				return Ok(A::ZeroSizedAllocation)
+				self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
+				return Ok(Self::ZeroSizedAllocation)
 			}
 
 			let non_zero_new_size = new_size.non_zero();
-			self.mutable_allocator().shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+			self.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 		}
-	}
-
-	#[inline(always)]
-	fn mutable_allocator(&self) -> &mut A
-	{
-		unsafe { &mut * self.0.get() }
 	}
 }

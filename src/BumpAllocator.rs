@@ -4,6 +4,8 @@
 
 /// This is a very simple bump allocator of minimal utility.
 ///
+/// This allocator is not thread-safe.
+///
 /// It:-
 ///
 /// * Can efficiently shrink and grow (reallocate) for the most recent allocation made (useful when pushing to a RawVec, say).
@@ -11,11 +13,11 @@
 /// * Has no ability to resize in place if dead space occurs before next allocation because of alignment.
 ///
 /// Is suitable for use with short-lived coroutines, such as those used to make a DNS query.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug)]
 pub struct BumpAllocator
 {
-	most_recent_allocation_pointer: MemoryAddress,
-	next_allocation_at_pointer: MemoryAddress,
+	most_recent_allocation_pointer: Cell<MemoryAddress>,
+	next_allocation_at_pointer: Cell<MemoryAddress>,
 	ends_at_pointer: MemoryAddress,
 }
 
@@ -49,45 +51,45 @@ macro_rules! allocation_ends_at_pointer
 impl Allocator for BumpAllocator
 {
 	#[inline(always)]
-	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		debug_assert!(non_zero_power_of_two_alignment <= Self::MaximumPowerOfTwoAlignment, "non_zero_power_of_two_alignment `{}` exceeds `{}`", non_zero_power_of_two_alignment, Self::MaximumPowerOfTwoAlignment);
 
-		let next_allocation_at_rounded_up_pointer = self.next_allocation_at_pointer.round_up_to_power_of_two(non_zero_power_of_two_alignment);
+		let next_allocation_at_rounded_up_pointer = self.next_allocation_at_pointer.get().round_up_to_power_of_two(non_zero_power_of_two_alignment);
 
-		self.most_recent_allocation_pointer = next_allocation_at_rounded_up_pointer;
-		self.next_allocation_at_pointer = allocation_ends_at_pointer!(self, non_zero_size, next_allocation_at_rounded_up_pointer);
+		self.most_recent_allocation_pointer.set(next_allocation_at_rounded_up_pointer);
+		self.next_allocation_at_pointer.set(allocation_ends_at_pointer!(self, non_zero_size, next_allocation_at_rounded_up_pointer));
 
 		Ok(next_allocation_at_rounded_up_pointer)
 	}
 
 	#[inline(always)]
-	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
 	{
-		if unlikely!(current_memory == self.most_recent_allocation_pointer)
+		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
 		{
-			self.next_allocation_at_pointer = self.most_recent_allocation_pointer
+			self.next_allocation_at_pointer.set(self.most_recent_allocation_pointer.get())
 		}
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
-		if unlikely!(current_memory == self.most_recent_allocation_pointer)
+		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
 		{
 			let size = non_zero_new_size.get();
-			self.next_allocation_at_pointer = current_memory.add(size)
+			self.next_allocation_at_pointer.set(current_memory.add(size))
 		}
 
 		Ok(current_memory)
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
-		if unlikely!(current_memory == self.most_recent_allocation_pointer)
+		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
 		{
-			self.next_allocation_at_pointer = allocation_ends_at_pointer!(self, non_zero_new_size, current_memory);
+			self.next_allocation_at_pointer.set(allocation_ends_at_pointer!(self, non_zero_new_size, current_memory));
 			Ok(current_memory)
 		}
 		else
@@ -118,8 +120,8 @@ impl BumpAllocator
 	{
 		Self
 		{
-			most_recent_allocation_pointer: starts_at,
-			next_allocation_at_pointer: starts_at,
+			most_recent_allocation_pointer: Cell::new(starts_at),
+			next_allocation_at_pointer: Cell::new(starts_at),
 			ends_at_pointer: starts_at.add(non_zero_size.get()),
 		}
 	}

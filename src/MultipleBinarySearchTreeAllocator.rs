@@ -4,6 +4,8 @@
 
 /// An allocator which uses sorted lists (red-black binary search trees) of different block sizes.
 ///
+/// This allocator is not thread-safe.
+///
 /// Each sorted list contains a different block size.
 ///
 /// Block sizes are powers of 2; the smallest is currently 16.
@@ -30,7 +32,7 @@ impl Default for MultipleBinarySearchTreeAllocator
 impl Allocator for MultipleBinarySearchTreeAllocator
 {
 	#[inline(always)]
-	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
 	{
 		macro_rules! try_to_allocate_exact_size_block
 		{
@@ -132,18 +134,11 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	}
 
 	#[inline(always)]
-	fn deallocate(&mut self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		let block_size = Self::block_size(non_zero_size);
 
 		let binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(block_size);
-		#[cfg(debug_assertions)]
-		{
-			if block_size.get() > 32
-			{
-				debug_assert_ne!(binary_search_tree_index, 0, "WTF?")
-			}
-		}
 
 		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
 		let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
@@ -156,23 +151,9 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&mut self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
 	{
-		debug_assert_ne!(non_zero_current_size.difference(non_zero_new_size), 0, "Should never be called with no difference");
-
-		let old_block_size = Self::block_size(non_zero_current_size);
-		let new_block_size = Self::block_size(non_zero_new_size);
-
-		self.split_up_block(current_memory.add_non_zero(new_block_size), current_memory.add_non_zero(old_block_size));
-
-		Ok(current_memory)
-	}
-
-	#[inline(always)]
-	fn growing_reallocate(&mut self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
-	{
-		let difference = non_zero_new_size.difference(non_zero_current_size);
-		debug_assert_ne!(difference, 0, "Should never be called with a zero difference");
+		debug_assert!(non_zero_new_size > non_zero_current_size, "non_zero_new_size `{}` should be greater than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
 		let old_block_size = Self::block_size(non_zero_current_size);
 		let new_block_size = Self::block_size(non_zero_new_size);
@@ -204,6 +185,19 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), non_zero_current_size.get()) };
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
 		Ok(block_to_copy_into)
+	}
+
+	#[inline(always)]
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	{
+		debug_assert!(non_zero_new_size < non_zero_current_size, "non_zero_new_size `{}` should be less than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
+
+		let old_block_size = Self::block_size(non_zero_current_size);
+		let new_block_size = Self::block_size(non_zero_new_size);
+
+		self.split_up_block(current_memory.add_non_zero(new_block_size), current_memory.add_non_zero(old_block_size));
+
+		Ok(current_memory)
 	}
 }
 
@@ -261,7 +255,7 @@ impl MultipleBinarySearchTreeAllocator
 	}
 
 	#[inline(always)]
-	fn split_up_block(&mut self, mut from: MemoryAddress, to: MemoryAddress)
+	fn split_up_block(&self, mut from: MemoryAddress, to: MemoryAddress)
 	{
 		let mut difference = to.difference(from);
 		while likely!(difference != 0)
@@ -275,7 +269,7 @@ impl MultipleBinarySearchTreeAllocator
 		}
 	}
 
-	fn coalesce(&mut self, inserted_node_pointer: NodePointer, block_size: NonZeroUsize, binary_search_tree_index: usize)
+	fn coalesce(&self, inserted_node_pointer: NodePointer, block_size: NonZeroUsize, binary_search_tree_index: usize)
 	{
 		let furthest_back_contiguous_with_inserted_node_pointer_memory_address = inserted_node_pointer.furthest_back_contiguous_with(block_size);
 
@@ -320,7 +314,7 @@ impl MultipleBinarySearchTreeAllocator
 	}
 
 	#[inline(always)]
-	fn binary_search_tree_for_block_size(&mut self, block_size: NonZeroUsize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
+	fn binary_search_tree_for_block_size(&self, block_size: NonZeroUsize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		self.binary_search_tree_for(BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(block_size))
 	}
@@ -332,7 +326,7 @@ impl MultipleBinarySearchTreeAllocator
 	}
 
 	#[inline(always)]
-	fn binary_search_tree_for(&mut self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
+	fn binary_search_tree_for(&self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		self.0.binary_search_tree_for(binary_search_tree_index)
 	}
@@ -367,11 +361,80 @@ mod MultipleBinarySearchTreeAllocatorTests
 	pub fn mixed_allocations()
 	{
 		let (mut allocator, memory) = new_allocator(256);
-		
+
 		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(128.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		assert_allocator_is_empty(&mut allocator);
+
+		destroy_memory(memory)
+	}
+
+	#[test]
+	pub fn shrink_allocation_within_block()
+	{
+		const AllocationSize: usize = 32;
+		const MemoryPattern: [u8; AllocationSize] = [0x0A; AllocationSize];
+
+		let (mut allocator, memory) = new_allocator(256);
+
+		let mut allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		allocation.write(MemoryPattern);
+
+		let reallocation = allocator.shrinking_reallocate(16.non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
+		assert_eq!(allocation, reallocation, "Did not shrink allocation within block");
+		assert_eq!(reallocation.read::<[u8; AllocationSize]>(), MemoryPattern, "Did not preserve memory contents when shrinking block");
+
+		destroy_memory(memory)
+	}
+
+	#[test]
+	pub fn shrink_allocation_within_block_and_deallocate_unused_block()
+	{
+		let (mut allocator, memory) = new_allocator(64);
+
+		let original_allocation = allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		assert_allocator_is_empty(&mut allocator);
+
+		let reallocation = allocator.shrinking_reallocate(32.non_zero(), 8.non_zero(), 64.non_zero(), original_allocation).expect(&format!("Did not reallocate"));
+		assert_eq!(original_allocation, reallocation, "Did not shrink allocation within block");
+
+		let _allocation = allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate recently freed block"));
+		assert_allocator_is_empty(&mut allocator);
+
+		destroy_memory(memory)
+	}
+
+	#[test]
+	pub fn grow_allocation_into_larger_block()
+	{
+		const AllocationSize: usize = 32;
+		const MemoryPattern: [u8; AllocationSize] = [0x0A; AllocationSize];
+
+		let (mut allocator, memory) = new_allocator(64);
+
+		let mut allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		allocation.write(MemoryPattern);
+
+		let reallocation = allocator.growing_reallocate((AllocationSize + 1).non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
+		assert_eq!(allocation, reallocation, "Did not shrink allocation within block");
+		assert_eq!(reallocation.read::<[u8; AllocationSize]>(), MemoryPattern, "Did not preserve memory contents when growing block");
+
+		destroy_memory(memory)
+	}
+
+	#[test]
+	pub fn deallocation()
+	{
+		const AllocationSize: usize = 31;
+
+		let (mut allocator, memory) = new_allocator(32);
+		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		assert_allocator_is_empty(&mut allocator);
+
+		allocator.deallocate(AllocationSize.non_zero(), 8.non_zero(), allocation);
+		let _allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		assert_allocator_is_empty(&mut allocator);
 
 		destroy_memory(memory)

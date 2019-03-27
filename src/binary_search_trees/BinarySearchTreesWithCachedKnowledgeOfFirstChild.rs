@@ -4,7 +4,7 @@
 
 pub(crate) struct BinarySearchTreesWithCachedKnowledgeOfFirstChild
 {
-	binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two: [BinarySearchTreeWithCachedKnowledgeOfFirstChild; Self::NumberOfBinarySearchTrees],
+	binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two: [UnsafeCell<BinarySearchTreeWithCachedKnowledgeOfFirstChild>; Self::NumberOfBinarySearchTrees],
 }
 
 impl Debug for BinarySearchTreesWithCachedKnowledgeOfFirstChild
@@ -17,7 +17,7 @@ impl Debug for BinarySearchTreesWithCachedKnowledgeOfFirstChild
 		for binary_search_tree_index in 0 .. Self::NumberOfBinarySearchTrees
 		{
 			let block_size = Self::binary_search_tree_index_to_block_size(binary_search_tree_index);
-			let binary_search_tree = &self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two[binary_search_tree_index];
+			let binary_search_tree = self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two[binary_search_tree_index].get().mutable_reference();
 
 			let has_blocks = binary_search_tree.has_blocks();
 			if has_blocks
@@ -132,11 +132,11 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	}
 
 	#[inline(always)]
-	pub(crate) fn binary_search_tree_for(&mut self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
+	pub(crate) fn binary_search_tree_for(&self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		debug_assert!(binary_search_tree_index < Self::NumberOfBinarySearchTrees, "binary_search_tree_index `{}` is too large", binary_search_tree_index);
 
-		unsafe { self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two.get_unchecked_mut(binary_search_tree_index) }
+		unsafe { self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two.get_unchecked(binary_search_tree_index) }.get().mutable_reference()
 	}
 
 	#[inline(always)]
