@@ -2,13 +2,20 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// An allocator which uses sorted lists (red-black binary search trees) of different block sizes.
+/// An allocator which uses sorted lists (red-black binary search trees) of different block sizes (sizes are powers of 2); in that sense, it is similar to an efficient buddy allocator.
+///
+/// However, it can also coalesce blocks that aren't a buddy, and, because of the way it uses block pointers, it can very efficiently find them; it has no book-keeping for allocated nodes whatsoever, at the expense of requiring the minimum allocated block size to be 32 bytes.
+///
+/// It currently has a hard maximum allocation size of 2^(log2(32) + 15) => 1Mb.
+/// It could be modified to make 'oversize' allocations out of multiple blocks, but its lack of book-keeping prevents them being deallocated.
+/// In the event that a large allocation is required, it is probably better to use mmap() or a NUMA mmap().
+///
+/// What it does not do is make an allocation out of differently sized blocks, eg a 96b allocation uses 128b, rather than 64b + maybe a coalesced 32b block.
+/// Whilst is could be modified to make such allocations, its lack of book-keeping prevents them being deallocated.
+///
+/// This allocator NEVER grows or shrinks its memory region.
 ///
 /// This allocator is not thread-safe.
-///
-/// Each sorted list contains a different block size.
-///
-/// Block sizes are powers of 2; the smallest is currently 16.
 pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
 
 impl Debug for MultipleBinarySearchTreeAllocator

@@ -3,6 +3,10 @@
 
 
 /// An allocator designed for contexts with different lifetimes.
+///
+/// This allocator NEVER grows or shrinks its memory region.
+///
+/// This allocator is not thread-safe.
 #[derive(Debug)]
 pub enum ContextAllocator
 {

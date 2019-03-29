@@ -43,6 +43,15 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn subtract(self, decrement: usize) -> Self
+	{
+		let usize = self.to_usize();
+		debug_assert!(usize >= decrement, "decrement is too large");
+
+		Self::from_usize(usize - decrement)
+	}
+
+	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
 		debug_assert!(self >= other, "other `{:?}` is less than self `{:?}`", other, self);
@@ -65,13 +74,13 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
-	fn read<V: Copy>(&self) -> V
+	fn read<V: Copy>(self) -> V
 	{
 		unsafe { (self.to_pointer() as *const V).read() }
 	}
 
 	#[inline(always)]
-	fn write<V: Copy>(&mut self, value: V)
+	fn write<V: Copy>(self, value: V)
 	{
 		unsafe { (self.to_pointer() as *mut V).write(value) }
 	}
@@ -84,11 +93,27 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
-	fn or_u8(self, bits_to_set: u8)
+	fn or_u64(self, bits_to_set: u64)
 	{
-		let pointer = self.to_pointer();
-		let current_value = unsafe { *pointer };
-		unsafe { *pointer = current_value | bits_to_set }
+		let current_value = self.read::<u64>();
+		self.write::<u64>(current_value | bits_to_set)
+	}
+
+	#[inline(always)]
+	fn set_bottom_bits_of_u64(self, number_of_bits_to_set: usize)
+	{
+		let number_of_bits_to_set = number_of_bits_to_set as u64;
+		self.or_u64((1 << number_of_bits_to_set) - 1);
+	}
+
+	#[inline(always)]
+	fn set_top_bits_of_u64(self, number_of_bits_to_set: usize)
+	{
+		const BitsInAByte: usize = 8;
+		const BitsInAnU64: u64 = (size_of::<u64>() * BitsInAByte) as u64;
+
+		let number_of_bits_to_set = number_of_bits_to_set as u64;
+		self.or_u64(((1 << number_of_bits_to_set) - 1) << (BitsInAnU64 - number_of_bits_to_set));
 	}
 
 	#[inline(always)]

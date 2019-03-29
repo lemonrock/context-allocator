@@ -22,6 +22,7 @@
 //! Allocators provided include:-
 //!
 //! * `BumpAllocator`, a never-freeing bump allocator with slight optimization for reallocating the last allocation.
+//! * `BitmapAllocator`, an allocator that uses a bitmap of free blocks.
 //! * `MultipleBinarySearchTreeAllocator`, an efficient allocator which minimizes fragmentation by using multiple red-black trees of free blocks which are aggresively defragmented.
 //! * `ContextAllocator`, a choice of either `BumpAllocator` or `MultipleBinarySearchTreeAllocator`.
 //! * `MemoryMapAllocator`, a mmap allocator.
@@ -45,6 +46,7 @@
 //! * Investigate supporting over-size allocations in `MultipleBinarySearchTreeAllocator` by scanning the largest binary search tree for contiguous blocks.
 //! * Investigate a persistent-memory backed allocator.
 //! * Properly support excess allocations and Alloc's grow_in_place functions, but only if these are used by downstream collections.
+//! * Investigate the use of the `BMI1` intrinsics `_blsi_u64` (extract lowest set bit), `_blsmsk_u64` and `_blsr_u64`.
 
 
 #[macro_use] extern crate likely;
@@ -88,6 +90,7 @@ include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
 include!("AllocatorState.rs");
 include!("AllocToAllocatorAdaptor.rs");
+include!("BitmapAllocator.rs");
 include!("BumpAllocator.rs");
 include!("ContextAllocator.rs");
 include!("CurrentAllocatorInUse.rs");

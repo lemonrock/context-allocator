@@ -4,8 +4,6 @@
 
 /// This is a very simple bump allocator of minimal utility.
 ///
-/// This allocator is not thread-safe.
-///
 /// It:-
 ///
 /// * Can efficiently shrink and grow (reallocate) for the most recent allocation made (useful when pushing to a RawVec, say).
@@ -13,6 +11,10 @@
 /// * Has no ability to resize in place if dead space occurs before next allocation because of alignment.
 ///
 /// Is suitable for use with short-lived coroutines, such as those used to make a DNS query.
+///
+/// This allocator NEVER grows or shrinks its memory region.
+///
+/// This allocator is not thread-safe.
 #[derive(Debug)]
 pub struct BumpAllocator
 {

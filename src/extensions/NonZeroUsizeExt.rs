@@ -22,6 +22,15 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn round_down_to_power_of_two(self, power_of_two: NonZeroUsize) -> usize
+	{
+		let value = self.to_usize();
+		let power_of_two_exponent = power_of_two.logarithm_base2();
+
+		value & !((1 << power_of_two_exponent) - 1)
+	}
+
+	#[inline(always)]
 	fn divide_power_of_two_by_power_of_two(self, divisor: NonZeroUsize) -> usize
 	{
 		debug_assert!(self.is_power_of_two(), "self `{:?}` is not a power of two", self);
@@ -46,6 +55,12 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	fn add(self, increment: usize) -> Self
 	{
 		Self::non_zero(self.to_usize() + increment)
+	}
+
+	#[inline(always)]
+	fn decrement(self) -> usize
+	{
+		self.to_usize() - 1
 	}
 
 	#[inline(always)]
