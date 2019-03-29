@@ -11,10 +11,29 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> usize
+	{
+		let power_of_two = non_zero_power_of_two_alignment.get();
+		let power_of_two_less_one = power_of_two - 1;
+
+		let value = self.to_usize();
+
+		debug_assert!(value.checked_add(power_of_two_less_one).is_some(), "non_zero_power_of_two_alignment is far too close to the maximum value of a pointer");
+
+		(value + power_of_two_less_one) & !power_of_two_less_one
+	}
+
+	#[inline(always)]
 	fn round_down_to_power_of_two(self, power_of_two: NonZeroUsize) -> usize
 	{
-		let value = self.to_usize();
 		let power_of_two_exponent = power_of_two.logarithm_base2();
+		self.round_down_to_power_of_two_exponent(power_of_two_exponent)
+	}
+
+	#[inline(always)]
+	fn round_down_to_power_of_two_exponent(self, power_of_two_exponent: usize) -> usize
+	{
+		let value = self.to_usize();
 
 		value & !((1 << power_of_two_exponent) - 1)
 	}

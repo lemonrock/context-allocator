@@ -25,17 +25,19 @@ impl Allocator for BitmapAllocator
 		let desired_alignment_power_of_two_exponent = non_zero_power_of_two_alignment.logarithm_base2();
 		if self.block_size_power_of_two_exponent >= desired_alignment_power_of_two_exponent
 		{
-			self.allocate_number_of_blocks(self.number_of_blocks_required(non_zero_size))
+			self.allocate_number_of_blocks(self.number_of_blocks_required(non_zero_size), 1.non_zero())
 		}
 		else
 		{
-// This calculation will calculate an appropriately aligned address with enough space, but it converts multiple possible allocated addresses to one address and so is not reversible.
-//			let alignment = non_zero_power_of_two_alignment.get();
-//			let size_to_allocate = (non_zero_size.get() + alignment - 1).non_zero();
-//			let allocation = self.allocate_number_of_blocks(self.number_of_blocks_required(size_to_allocate))?;
-//
-//			Ok((allocation + alignment - 1) & (-(alignment as isize) as usize))
-			panic!("Alignment larger than block size is not possible, as we have no place to store book-keeping information")
+			let block_alignment_power_of_two_exponent_less_minimum = desired_alignment_power_of_two_exponent - self.block_size_power_of_two_exponent;
+			let block_alignment_power_of_two_less_minimum = 1 << block_alignment_power_of_two_exponent_less_minimum;
+
+			if unlikely!(block_alignment_power_of_two_less_minimum > Self::BitsInAnU64)
+			{
+				return Err(AllocErr)
+			}
+
+			self.allocate_number_of_blocks(self.number_of_blocks_required(non_zero_size), block_alignment_power_of_two_less_minimum.non_zero())
 		}
 	}
 
@@ -94,13 +96,14 @@ impl BitmapAllocator
 		((size_to_allocate.get() + self.block_size_less_one) >> self.block_size_power_of_two_exponent).non_zero()
 	}
 
-	fn allocate_number_of_blocks(&self, number_of_blocks_required: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate_number_of_blocks(&self, number_of_blocks_required: NonZeroUsize, block_alignment_power_of_two_less_minimum: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		macro_rules! scan
 		{
-			($self: ident, $end_memory_address: ident, $callback: ident) =>
+			($self: ident, $end_memory_address: ident, $block_alignment_power_of_two_less_minimum: ident, $callback: ident) =>
 			{
 				{
+					// keep this aligned.
 					let mut contigous_zeros_count = 0;
 					let mut memory_address = $self.next_allocation_start_from.get();
 					while memory_address != $end_memory_address
@@ -108,12 +111,13 @@ impl BitmapAllocator
 						let current = memory_address.read::<u64>();
 						let current_leading_zeros = current.leading_zeros() as usize;
 						let contiguous_zeros_now_available = contigous_zeros_count + current_leading_zeros;
+
 						if contiguous_zeros_now_available >= number_of_blocks_required.get()
 						{
 							return $self.allocate_in_contiguous_leading_zeros(contigous_zeros_count, memory_address, number_of_blocks_required, contiguous_zeros_now_available)
 						}
 
-						contigous_zeros_count = match $callback($self, number_of_blocks_required, memory_address, current, current_leading_zeros, contiguous_zeros_now_available)
+						contigous_zeros_count = match $callback($self, number_of_blocks_required, memory_address, current, current_leading_zeros, contiguous_zeros_now_available, $block_alignment_power_of_two_less_minimum)
 						{
 							Ok(successful_allocation) => return Ok(successful_allocation),
 							Err(contigous_zeros_count) => contigous_zeros_count,
@@ -124,8 +128,7 @@ impl BitmapAllocator
 			}
 		}
 
-		let number_of_blocks_required = number_of_blocks_required.get();
-		let callback = if number_of_blocks_required < Self::BitsInAnU64
+		let callback = if number_of_blocks_required.get() < Self::BitsInAnU64
 		{
 			Self::number_of_blocks_is_less_than_64
 		}
@@ -135,11 +138,11 @@ impl BitmapAllocator
 		};
 
 		let end_memory_address = self.exclusive_end_of_array_of_u64s;
-		scan!(self, end_memory_address, callback);
+		scan!(self, end_memory_address, block_alignment_power_of_two_less_minimum, callback);
 
 		let end_memory_address = self.next_allocation_start_from.get();
 		self.next_allocation_start_from.set(self.inclusive_start_of_array_of_u64s);
-		scan!(self, end_memory_address, callback);
+		scan!(self, end_memory_address, block_alignment_power_of_two_less_minimum, callback);
 
 		Err(AllocErr)
 	}
@@ -175,11 +178,23 @@ impl BitmapAllocator
 	}
 
 	#[inline(always)]
-	fn number_of_blocks_is_less_than_64(&self, number_of_blocks_required: NonZeroUsize, memory_address: MemoryAddress, current: u64, current_leading_zeros: usize, contiguous_zeros_now_available: usize) -> Result<MemoryAddress, usize>
+	fn number_of_blocks_is_less_than_64(&self, number_of_blocks_required: NonZeroUsize, memory_address: MemoryAddress, current: u64, current_leading_zeros: usize, contiguous_zeros_now_available: usize, block_alignment_power_of_two_less_minimum: NonZeroUsize) -> Result<MemoryAddress, usize>
 	{
+		debug_assert_ne!(current_leading_zeros, Self::BitsInAnU64, "current_leading_zeros can not equal BitsInAnU64 `{}` otherwise, since the number of blocks is less than 64, we would have found free space as long as block_alignment_power_of_two_less_minimum does not exceed BitsInAnU64", Self::BitsInAnU64);
+
 		let number_of_blocks_required = number_of_blocks_required.get();
 		let bits_to_match = 1 << (number_of_blocks_required as u64) - 1;
-		let maximum_shift = Self::BitsInAnU64 - current_leading_zeros - number_of_blocks_required;
+
+		let irrelevant_top_bits_count = current_leading_zeros + 1;
+		let aligned_irrelevant_top_bits_count = irrelevant_top_bits_count.round_up_to_power_of_two(block_alignment_power_of_two_less_minimum);
+
+		let top_bits_used = aligned_irrelevant_top_bits_count + number_of_blocks_required;
+		if top_bits_used > Self::BitsInAnU64
+		{
+			return Err(Self::aligned_trailing_zeros(current, block_alignment_power_of_two_less_minimum))
+		}
+
+		let maximum_shift = Self::BitsInAnU64 - top_bits_used;
 		let mut shift = maximum_shift;
 		loop
 		{
@@ -198,14 +213,15 @@ impl BitmapAllocator
 			{
 				break
 			}
-			shift -= 1;
+
+			shift -= block_alignment_power_of_two_less_minimum.get();
 		}
 
-		Err(current.trailing_zeros() as usize)
+		Err(Self::aligned_trailing_zeros(current, block_alignment_power_of_two_less_minimum))
 	}
 
 	#[inline(always)]
-	fn number_of_blocks_is_64_or_more(&self, _number_of_blocks_required: NonZeroUsize, _memory_address: MemoryAddress, current: u64, current_leading_zeros: usize, contiguous_zeros_now_available: usize) -> Result<MemoryAddress, usize>
+	fn number_of_blocks_is_64_or_more(&self, _number_of_blocks_required: NonZeroUsize, _memory_address: MemoryAddress, current: u64, current_leading_zeros: usize, contiguous_zeros_now_available: usize, block_alignment_power_of_two_less_minimum: NonZeroUsize) -> Result<MemoryAddress, usize>
 	{
 		if likely!(current_leading_zeros == Self::SizeOfU64)
 		{
@@ -213,7 +229,7 @@ impl BitmapAllocator
 		}
 		else
 		{
-			Err(current.trailing_zeros() as usize)
+			Err(Self::aligned_trailing_zeros(current, block_alignment_power_of_two_less_minimum))
 		}
 	}
 
@@ -223,5 +239,14 @@ impl BitmapAllocator
 		let offset_in_bytes = relative_offset_in_number_of_blocks << self.block_size_power_of_two_exponent;
 		self.next_allocation_start_from.set(memory_address);
 		self.allocations_start_from.add(offset_in_bytes)
+	}
+
+	#[inline(always)]
+	fn aligned_trailing_zeros(current: u64, block_alignment_power_of_two_less_minimum: NonZeroUsize) -> usize
+	{
+		debug_assert!(block_alignment_power_of_two_less_minimum.get() <= Self::BitsInAnU64, "block_alignment_power_of_two_less_minimum `{}` exceeds `{}`", block_alignment_power_of_two_less_minimum, Self::BitsInAnU64);
+
+		let maximum_free_blocks = current.trailing_zeros() as usize;
+		maximum_free_blocks.round_down_to_power_of_two(block_alignment_power_of_two_less_minimum)
 	}
 }
