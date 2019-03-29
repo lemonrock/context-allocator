@@ -25,7 +25,8 @@ impl Allocator for BitmapAllocator
 		let desired_alignment_power_of_two_exponent = non_zero_power_of_two_alignment.logarithm_base2();
 		if self.block_size_power_of_two_exponent >= desired_alignment_power_of_two_exponent
 		{
-			self.allocate_number_of_blocks(self.number_of_blocks_required(non_zero_size), 1.non_zero())
+			let number_of_blocks_required = self.number_of_blocks_required(non_zero_size);
+			self.allocate_number_of_blocks(number_of_blocks_required, 1.non_zero())
 		}
 		else
 		{
@@ -37,7 +38,8 @@ impl Allocator for BitmapAllocator
 				return Err(AllocErr)
 			}
 
-			self.allocate_number_of_blocks(self.number_of_blocks_required(non_zero_size), block_alignment_power_of_two_less_minimum.non_zero())
+			let number_of_blocks_required = self.number_of_blocks_required(non_zero_size);
+			self.allocate_number_of_blocks(number_of_blocks_required, block_alignment_power_of_two_less_minimum.non_zero())
 		}
 	}
 
@@ -45,6 +47,32 @@ impl Allocator for BitmapAllocator
 	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
 	{
 		let number_of_blocks_required = self.number_of_blocks_required(non_zero_size);
+		let blocks_offset = current_memory.subtract(self.allocations_start_from) >> self.block_size_power_of_two_exponent;
+
+		let u64s_offset = blocks_offset / Self::BitsInAnU64;
+		let bits_offset_with_u64 = blocks_offset - (u64s_offset * Self::BitsInAnU64);
+		let start_from_memory_address = self.inclusive_start_of_array_of_u64s.add(u64s_offset * Self::SizeOfU64);
+		let (mut contiguous_bits_to_unset_from_memory_address, mut remaining_blocks) = if likely!(bits_offset_with_u64 != 0)
+		{
+			let lower_bits_to_unset = Self::BitsInAnU64 - bits_offset_with_u64;
+			start_from_memory_address.unset_bottom_bits_of_u64(bits_to_unset);
+			(start_from_memory_address, number_of_blocks_required - lower_bits_to_unset)
+		}
+		else
+		{
+			(start_from_memory_address, number_of_blocks_required)
+		};
+
+		while remaining_blocks > (Self::BitsInAnU64 - 1)
+		{
+			contiguous_bits_to_unset_from_memory_address.write_and_advance(0x0000_0000_0000_0000u64);
+			remaining_blocks -= Self::BitsInAnU64;
+		}
+
+		if likely!(remaining_blocks != 0)
+		{
+			contiguous_bits_to_unset_from_memory_address.unset_top_bits_of_u64(remaining_blocks);
+		}
 	}
 
 	#[inline(always)]
@@ -96,6 +124,7 @@ impl BitmapAllocator
 		((size_to_allocate.get() + self.block_size_less_one) >> self.block_size_power_of_two_exponent).non_zero()
 	}
 
+	#[inline(always)]
 	fn allocate_number_of_blocks(&self, number_of_blocks_required: NonZeroUsize, block_alignment_power_of_two_less_minimum: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		macro_rules! scan

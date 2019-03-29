@@ -107,6 +107,15 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn unset_bottom_bits_of_u64(self, number_of_bits_to_unset: usize)
+	{
+		let number_of_bits_to_unset = number_of_bits_to_unset as u64;
+		let value = self.read::<u64>();
+		let mask = !((1 << number_of_bits_to_set) - 1);
+		self.write::<u64>(value & mask);
+	}
+
+	#[inline(always)]
 	fn set_top_bits_of_u64(self, number_of_bits_to_set: usize)
 	{
 		const BitsInAByte: usize = 8;
@@ -114,6 +123,15 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 
 		let number_of_bits_to_set = number_of_bits_to_set as u64;
 		self.or_u64(((1 << number_of_bits_to_set) - 1) << (BitsInAnU64 - number_of_bits_to_set));
+	}
+
+	#[inline(always)]
+	fn unset_top_bits_of_u64(self, number_of_bits_to_unset: usize)
+	{
+		let number_of_bits_to_unset = number_of_bits_to_unset as u64;
+		let value = self.read::<u64>();
+		let mask = !(((1 << number_of_bits_to_set) - 1) << (BitsInAnU64 - number_of_bits_to_set));
+		self.write::<u64>(value & mask);
 	}
 
 	#[inline(always)]
