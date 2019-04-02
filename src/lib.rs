@@ -90,7 +90,6 @@ include!("Allocator.rs");
 include!("AllocatorAdaptor.rs");
 include!("AllocatorState.rs");
 include!("AllocToAllocatorAdaptor.rs");
-include!("BitmapAllocator.rs");
 include!("BumpAllocator.rs");
 include!("ContextAllocator.rs");
 include!("CurrentAllocatorInUse.rs");
