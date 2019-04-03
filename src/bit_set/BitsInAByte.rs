@@ -2,16 +2,4 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-use super::*;
-
-
-include!("AbsoluteLocationInBitSet.rs");
-include!("BitSetAllocator.rs");
-include!("BitSetWord.rs");
-include!("BitSetWordPointer.rs");
-include!("BitsInAByte.rs");
-include!("BlockSize.rs");
-include!("NumberOfBits.rs");
-include!("NumberOfBitSetWords.rs");
-include!("NumberOfBytes.rs");
-include!("RelativeLocationInBitSet.rs");
+const BitsInAByte: usize = 8;

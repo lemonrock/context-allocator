@@ -8,7 +8,7 @@
 ///
 /// This allocator is not thread-safe.
 #[derive(Debug)]
-pub enum ContextAllocator
+pub enum ContextAllocator<LargeAllocationAllocator: Allocator>
 {
 	/// Use this variant for contexts with short-lived lifetimes.
 	///
@@ -17,11 +17,16 @@ pub enum ContextAllocator
 	/// Reallocation is very expensive when growing unless reallocating the most recently made allocation.
 	ShortLived(BumpAllocator),
 
+	/// Use this variant for contexts with slightly longer than short-lived lifetimes.
+	///
+	/// Slower allocation and deallocation but reallocation is less expensive than for ShortLived.
+	MediumLived(BitSetAllocator<LargeAllocationAllocator>),
+
 	/// Use this variant for contexts with long-lived lifetimes.
 	LongLived(MultipleBinarySearchTreeAllocator),
 }
 
-impl Allocator for ContextAllocator
+impl<LargeAllocationAllocator: Allocator> Allocator for ContextAllocator<LargeAllocationAllocator>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -31,6 +36,8 @@ impl Allocator for ContextAllocator
 		match *self
 		{
 			ShortLived(ref allocator) => allocator.allocate(non_zero_size, non_zero_power_of_two_alignment),
+
+			MediumLived(ref allocator) => allocator.allocate(non_zero_size, non_zero_power_of_two_alignment),
 
 			LongLived(ref allocator) => allocator.allocate(non_zero_size, non_zero_power_of_two_alignment),
 		}
@@ -45,6 +52,8 @@ impl Allocator for ContextAllocator
 		{
 			ShortLived(ref allocator) => allocator.deallocate(non_zero_size, non_zero_power_of_two_alignment, current_memory),
 
+			MediumLived(ref allocator) => allocator.deallocate(non_zero_size, non_zero_power_of_two_alignment, current_memory),
+
 			LongLived(ref allocator) => allocator.deallocate(non_zero_size, non_zero_power_of_two_alignment, current_memory),
 		}
 	}
@@ -58,6 +67,8 @@ impl Allocator for ContextAllocator
 		{
 			ShortLived(ref allocator) => allocator.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
 
+			MediumLived(ref allocator) => allocator.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
+
 			LongLived(ref allocator) => allocator.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
 		}
 	}
@@ -70,6 +81,8 @@ impl Allocator for ContextAllocator
 		match *self
 		{
 			ShortLived(ref allocator) => allocator.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
+
+			MediumLived(ref allocator) => allocator.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
 
 			LongLived(ref allocator) => allocator.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory),
 		}
