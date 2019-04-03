@@ -106,39 +106,66 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn and_u64(self, bits_to_preserve: u64)
+	{
+		let current_value = self.read_u64();
+		self.write::<u64>(current_value & bits_to_preserve)
+	}
+
+	const BitsInAByte: usize = 8;
+
+	const BitsInAnU64: usize = size_of::<u64>() * Self::BitsInAByte;
+
+	#[inline(always)]
 	fn set_bottom_bits_of_u64(self, number_of_bits_to_set: usize)
 	{
+		self.set_middle_bits_of_u64(number_of_bits_to_set, number_of_bits_to_set)
+	}
+
+	#[inline(always)]
+	fn set_middle_bits_of_u64(self, number_of_bits_to_set: usize, number_of_lower_bits: usize)
+	{
+		debug_assert!(number_of_bits_to_set <= Self::BitsInAnU64);
+		debug_assert!(number_of_lower_bits <= Self::BitsInAnU64);
+		debug_assert!(number_of_bits_to_set <= number_of_lower_bits, "number_of_lower_bits `{}` is greater than number_of_bits_to_set `{}`", number_of_lower_bits, number_of_bits_to_set);
+
 		let number_of_bits_to_set = number_of_bits_to_set as u64;
-		self.or_u64((1 << number_of_bits_to_set) - 1);
+		let number_of_lower_bits = number_of_lower_bits as u64;
+
+		self.or_u64(((1 << number_of_bits_to_set) - 1) << (number_of_lower_bits - number_of_bits_to_set));
+	}
+
+	#[inline(always)]
+	fn set_top_bits_of_u64(self, number_of_bits_to_set: usize)
+	{
+		self.set_middle_bits_of_u64(number_of_bits_to_set, Self::BitsInAnU64 as usize)
 	}
 
 	#[inline(always)]
 	fn unset_bottom_bits_of_u64(self, number_of_bits_to_unset: usize)
 	{
-		let number_of_bits_to_unset = number_of_bits_to_unset as u64;
-		let value = self.read_u64();
-		let mask = !((1 << number_of_bits_to_unset) - 1);
-		self.write::<u64>(value & mask);
+		self.unset_middle_bits_of_u64(number_of_bits_to_unset, number_of_bits_to_unset)
 	}
 
-	const BitsInAByte: usize = 8;
-	const BitsInAnU64: u64 = (size_of::<u64>() * Self::BitsInAByte) as u64;
-
 	#[inline(always)]
-	fn set_top_bits_of_u64(self, number_of_bits_to_set: usize)
+	fn unset_middle_bits_of_u64(self, number_of_bits_to_unset: usize, number_of_lower_bits: usize)
 	{
+		debug_assert!(number_of_bits_to_unset <= Self::BitsInAnU64);
+		debug_assert!(number_of_lower_bits <= Self::BitsInAnU64);
+		debug_assert!(number_of_bits_to_unset <= number_of_lower_bits, "number_of_lower_bits `{}` is greater than number_of_bits_to_unset `{}`", number_of_lower_bits, number_of_bits_to_unset);
 
-		let number_of_bits_to_set = number_of_bits_to_set as u64;
-		self.or_u64(((1 << number_of_bits_to_set) - 1) << (Self::BitsInAnU64 - number_of_bits_to_set));
+		let number_of_bits_to_unset = number_of_bits_to_unset as u64;
+
+		let number_of_lower_bits = number_of_lower_bits as u64;
+
+		let bits_to_preserve = !((1 << number_of_bits_to_unset - 1) << (number_of_lower_bits - number_of_bits_to_unset));
+		self.and_u64(bits_to_preserve);
 	}
 
 	#[inline(always)]
 	fn unset_top_bits_of_u64(self, number_of_bits_to_unset: usize)
 	{
-		let number_of_bits_to_unset = number_of_bits_to_unset as u64;
-		let value = self.read_u64();
-		let mask = !(((1 << number_of_bits_to_unset) - 1) << (Self::BitsInAnU64 - number_of_bits_to_unset));
-		self.write::<u64>(value & mask);
+		self.unset_middle_bits_of_u64(number_of_bits_to_unset, Self::BitsInAnU64 as usize)
 	}
 
 	#[inline(always)]

@@ -19,6 +19,7 @@ edition = '2018'
 version = "0.0.0"
 
 [dependencies]
+either = "^1.5.2"
 likely = "^0.1.0"
 
 [target.'cfg(unix)'.dependencies]

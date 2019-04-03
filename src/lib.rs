@@ -49,6 +49,7 @@
 //! * Investigate the use of the `BMI1` intrinsics `_blsi_u64` (extract lowest set bit), `_blsmsk_u64` and `_blsr_u64`.
 
 
+extern crate either;
 #[macro_use] extern crate likely;
 #[cfg(unix)] extern crate libc;
 #[cfg(any(target_os = "android", target_os = "linux"))] extern crate syscall_alt;
@@ -57,6 +58,7 @@
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::extensions::*;
+use ::either::*;
 #[cfg(unix)] use ::libc::*;
 #[cfg(any(target_os = "android", target_os = "linux"))] use ::syscall_alt::syscalls::Syscall;
 use ::std::alloc::CannotReallocInPlace;
@@ -104,6 +106,10 @@ pub(crate) mod binary_search_trees;
 
 
 pub(crate) mod extensions;
+
+
+/// A bit set based allocator; allows reallocations, but requires a linear scan to find free blocks.
+pub mod bit_set;
 
 
 /// NUMA memory mapping.
