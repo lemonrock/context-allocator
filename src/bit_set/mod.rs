@@ -7,18 +7,6 @@ use ::std::ops::Sub;
 use ::std::ops::SubAssign;
 use std::ops::{Add, Shr};
 
-
-/*
-	Real world implementations of free space bitmaps will find ways to centralize information on free space.
-		One approach is to split the bitmap into many chunks.
-		A separate array then stores the number of free blocks in each chunk, so chunks with insufficient space can be easily skipped over, and the total amount of free space is easier to compute.
-		Finding free space now entails searching the summary array first, then searching the associated bitmap chunk for the exact blocks available
-			This is very much like using popcnt();
-
-*/
-
-
-
 const BitsInAByte: usize = 8;
 
 #[derive(Default, Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -162,18 +150,11 @@ impl BitSetWordPointer
 	}
 
 	#[inline(always)]
-	fn increment_in_bytes_non_zero(self, size_in_bytes: NonZeroUsize) -> Self
-	{
-		self.increment_in_bytes(NumberOfBytes(size_in_bytes.get()))
-	}
-
-	#[inline(always)]
 	fn decrement_in_bit_set_words(self, number_of_bit_set_words: NumberOfBitSetWords) -> Self
 	{
 		self.decrement_in_bytes(number_of_bit_set_words.to_number_of_bytes())
 	}
 
-	#[doc(hidden)]
 	#[inline(always)]
 	fn increment_in_bytes(self, number_of_bytes: NumberOfBytes) -> Self
 	{
@@ -184,7 +165,6 @@ impl BitSetWordPointer
 		Self(self.memory_address().add(number_of_bytes).cast::<BitSetWord>())
 	}
 
-	#[doc(hidden)]
 	#[inline(always)]
 	fn decrement_in_bytes(self, number_of_bytes: NumberOfBytes) -> Self
 	{
@@ -410,6 +390,12 @@ impl NumberOfBits
 	}
 
 	#[inline(always)]
+	fn to_usize(self) -> usize
+	{
+		self.0 as usize
+	}
+
+	#[inline(always)]
 	fn to_u64(self) -> u64
 	{
 		self.0 as u64
@@ -522,7 +508,7 @@ impl BlockSize
 
 /// Bit set based allocator.
 #[derive(Debug)]
-pub struct BitSetAllocator
+pub struct BitSetAllocator<A: Allocator>
 {
 	inclusive_start_of_bit_set: BitSetWordPointer,
 	exclusive_end_of_bit_set: BitSetWordPointer,
@@ -532,9 +518,21 @@ pub struct BitSetAllocator
 	allocations_end_at: MemoryAddress,
 
 	block_size: BlockSize,
+
+	allocation_size: NonZeroUsize,
+	allocations_allocator: A,
 }
 
-impl Allocator for BitSetAllocator
+impl<A: Allocator> Drop for BitSetAllocator<A>
+{
+	#[inline(always)]
+	fn drop(&mut self)
+	{
+		self.allocations_allocator.deallocate(self.allocation_size, self.block_size.block_size, self.allocations_start_from)
+	}
+}
+
+impl<A: Allocator> Allocator for BitSetAllocator<A>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -670,25 +668,48 @@ impl Allocator for BitSetAllocator
 	}
 }
 
-impl BitSetAllocator
+impl<A: Allocator> BitSetAllocator<A>
 {
 	/// Create a new instance.
 	#[inline(always)]
-	pub fn new(inclusive_start_of_bitset: MemoryAddress, size_in_bytes: NonZeroUsize, allocations_start_from: MemoryAddress, block_size: NonZeroUsize) -> Self
+	pub fn new(block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, allocations_allocator: A) -> Result<Self, AllocErr>
 	{
-		let inclusive_start_of_bitset = BitSetWordPointer::wrap(inclusive_start_of_bitset);
+		debug_assert!(block_size.is_power_of_two(), "block_size `{:?}` must be a power of 2", block_size);
+		debug_assert!(block_size.get() >= BitSetWord::SizeInBytes, "block_size `{:?}` must at least `{:?}` so that the bit set metadata holding free blocks can be allocated contiguous with the memory used for blocks", block_size, BitSetWord::SizeInBytes);
 
-		Self
-		{
-			inclusive_start_of_bit_set: inclusive_start_of_bitset,
-			exclusive_end_of_bit_set: inclusive_start_of_bitset.increment_in_bytes_non_zero(size_in_bytes),
-			start_search_for_next_allocation_at: Cell::new(inclusive_start_of_bitset),
+		let size_in_bytes = number_of_blocks.get() << block_size.logarithm_base2();
+		let bit_set_size_in_bytes = number_of_blocks.get() / NumberOfBits::InBitSetWord.to_usize();
+		let allocation_size = (size_in_bytes + bit_set_size_in_bytes).non_zero();
+		let allocations_start_from = allocations_allocator.allocate(allocation_size, block_size)?;
 
-			allocations_start_from,
-			allocations_end_at: allocations_start_from.add_non_zero(size_in_bytes),
+		let allocations_end_at = allocations_start_from.add(size_in_bytes);
+		let (inclusive_start_of_bit_set, exclusive_end_of_bit_set) = Self::initialize_bit_set_so_all_memory_is_unallocated(allocations_end_at, bit_set_size_in_bytes);
 
-			block_size: BlockSize::new(block_size),
-		}
+		Ok
+		(
+			Self
+			{
+				inclusive_start_of_bit_set,
+				exclusive_end_of_bit_set,
+				start_search_for_next_allocation_at: Cell::new(inclusive_start_of_bit_set),
+
+				allocations_start_from,
+				allocations_end_at,
+
+				block_size: BlockSize::new(block_size),
+
+				allocation_size,
+				allocations_allocator,
+			}
+		)
+	}
+
+	#[inline(always)]
+	fn initialize_bit_set_so_all_memory_is_unallocated(allocations_end_at: MemoryAddress, bit_set_size_in_bytes: usize) -> (BitSetWordPointer, BitSetWordPointer)
+	{
+		unsafe { allocations_end_at.as_ptr().write_bytes(0x00, bit_set_size_in_bytes) };
+		let inclusive_start_of_bit_set = BitSetWordPointer::wrap(allocations_end_at);
+		(inclusive_start_of_bit_set, inclusive_start_of_bit_set.increment_in_bytes(NumberOfBytes(bit_set_size_in_bytes)))
 	}
 
 	#[inline(always)]
@@ -916,4 +937,3 @@ impl BitSetAllocator
 		unaligned_trailing_unset_bits >> power_of_two_exponent
 	}
 }
-
