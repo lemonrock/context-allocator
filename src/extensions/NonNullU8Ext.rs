@@ -52,6 +52,12 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn subtract_non_zero(self, decrement: NonZeroUsize) -> Self
+	{
+		self.subtract(decrement.get())
+	}
+
+	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
 		debug_assert!(self >= other, "other `{:?}` is less than self `{:?}`", other, self);

@@ -5,10 +5,7 @@
 use super::*;
 
 
-/// An arena.
-pub struct Arena
-{
-
-}
-
-
+include!("ArenaMemorySource.rs");
+include!("SlotIndex.rs");
+include!("UnallocatedBlock.rs");
+include!("Unsized.rs");

@@ -34,6 +34,21 @@ impl Default for MemoryMapAllocator
 	}
 }
 
+impl MemorySource for MemoryMapAllocator
+{
+	#[inline(always)]
+	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	{
+		self.mmap_memory(non_zero_size.get())
+	}
+
+	#[inline(always)]
+	fn release(&self, non_zero_size: NonZeroUsize, current_memory: MemoryAddress)
+	{
+		Self::munmap_memory(current_memory, non_zero_size.get())
+	}
+}
+
 impl Allocator for MemoryMapAllocator
 {
 	#[inline(always)]

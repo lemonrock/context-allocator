@@ -4,7 +4,7 @@
 
 /// Bit set based allocator.
 #[derive(Debug)]
-pub struct BitSetAllocator<LargeAllocationAllocator: Allocator>
+pub struct BitSetAllocator<MS: MemorySource>
 {
 	inclusive_start_of_bit_set: BitSetWordPointer,
 	exclusive_end_of_bit_set: BitSetWordPointer,
@@ -15,20 +15,20 @@ pub struct BitSetAllocator<LargeAllocationAllocator: Allocator>
 
 	block_size: BlockSize,
 
-	allocation_size: NonZeroUsize,
-	allocations_allocator: LargeAllocationAllocator,
+	memory_source: MS,
+	memory_source_size: NonZeroUsize,
 }
 
-impl<LargeAllocationAllocator: Allocator> Drop for BitSetAllocator<LargeAllocationAllocator>
+impl<MS: MemorySource> Drop for BitSetAllocator<MS>
 {
 	#[inline(always)]
 	fn drop(&mut self)
 	{
-		self.allocations_allocator.deallocate(self.allocation_size, self.block_size.block_size, self.allocations_start_from)
+		self.memory_source.release(self.memory_source_size, self.allocations_start_from)
 	}
 }
 
-impl<LargeAllocationAllocator: Allocator> Allocator for BitSetAllocator<LargeAllocationAllocator>
+impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -164,19 +164,19 @@ impl<LargeAllocationAllocator: Allocator> Allocator for BitSetAllocator<LargeAll
 	}
 }
 
-impl<A: Allocator> BitSetAllocator<A>
+impl<MS: MemorySource> BitSetAllocator<MS>
 {
 	/// Create a new instance.
 	#[inline(always)]
-	pub fn new(block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, allocations_allocator: A) -> Result<Self, AllocErr>
+	pub fn new(block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, memory_source: MS) -> Result<Self, AllocErr>
 	{
 		debug_assert!(block_size.is_power_of_two(), "block_size `{:?}` must be a power of 2", block_size);
 		debug_assert!(block_size.get() >= BitSetWord::SizeInBytes, "block_size `{:?}` must at least `{:?}` so that the bit set metadata holding free blocks can be allocated contiguous with the memory used for blocks", block_size, BitSetWord::SizeInBytes);
 
 		let size_in_bytes = number_of_blocks.get() << block_size.logarithm_base2();
 		let bit_set_size_in_bytes = number_of_blocks.get() / NumberOfBits::InBitSetWord.to_usize();
-		let allocation_size = (size_in_bytes + bit_set_size_in_bytes).non_zero();
-		let allocations_start_from = allocations_allocator.allocate(allocation_size, block_size)?;
+		let memory_source_size = (size_in_bytes + bit_set_size_in_bytes).non_zero();
+		let allocations_start_from = memory_source.obtain(memory_source_size)?;
 
 		let allocations_end_at = allocations_start_from.add(size_in_bytes);
 		let (inclusive_start_of_bit_set, exclusive_end_of_bit_set) = Self::initialize_bit_set_so_all_memory_is_unallocated(allocations_end_at, bit_set_size_in_bytes);
@@ -194,8 +194,8 @@ impl<A: Allocator> BitSetAllocator<A>
 
 				block_size: BlockSize::new(block_size),
 
-				allocation_size,
-				allocations_allocator,
+				memory_source_size,
+				memory_source,
 			}
 		)
 	}

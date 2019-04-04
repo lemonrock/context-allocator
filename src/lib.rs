@@ -10,6 +10,7 @@
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
 #![feature(core_intrinsics)]
+#![feature(extern_types)]
 #![feature(thread_local)]
 
 
@@ -110,11 +111,12 @@ include!("GlobalAllocToAllocatorAdaptor.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
 include!("MemoryAddress.rs");
 include!("MemoryRange.rs");
+include!("MemorySource.rs");
 include!("MultipleBinarySearchTreeAllocator.rs");
 
 
-/// A specialized arena allocator.
-pub mod arena;
+/// A memory source which uses an arena.
+pub mod arena_memory_source;
 
 
 pub(crate) mod binary_search_trees;

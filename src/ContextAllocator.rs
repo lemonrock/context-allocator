@@ -8,7 +8,7 @@
 ///
 /// This allocator is not thread-safe.
 #[derive(Debug)]
-pub enum ContextAllocator<LargeAllocationAllocator: Allocator>
+pub enum ContextAllocator<MS: MemorySource>
 {
 	/// Use this variant for contexts with short-lived lifetimes.
 	///
@@ -20,13 +20,13 @@ pub enum ContextAllocator<LargeAllocationAllocator: Allocator>
 	/// Use this variant for contexts with slightly longer than short-lived lifetimes.
 	///
 	/// Slower allocation and deallocation but reallocation is less expensive than for ShortLived.
-	MediumLived(BitSetAllocator<LargeAllocationAllocator>),
+	MediumLived(BitSetAllocator<MS>),
 
 	/// Use this variant for contexts with long-lived lifetimes.
 	LongLived(MultipleBinarySearchTreeAllocator),
 }
 
-impl<LargeAllocationAllocator: Allocator> Allocator for ContextAllocator<LargeAllocationAllocator>
+impl<MS: MemorySource> Allocator for ContextAllocator<MS>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>

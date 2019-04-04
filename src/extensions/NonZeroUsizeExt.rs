@@ -96,6 +96,12 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	}
 
 	#[inline(always)]
+	fn multiply(self, other: Self) -> NonZeroUsize
+	{
+		(self.to_usize() * other.to_usize()).non_zero()
+	}
+
+	#[inline(always)]
 	fn is_odd(self) -> bool
 	{
 		self.to_usize().is_odd()
