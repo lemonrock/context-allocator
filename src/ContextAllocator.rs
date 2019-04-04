@@ -19,7 +19,7 @@ pub enum ContextAllocator<MS: MemorySource>
 
 	/// Use this variant for contexts with slightly longer than short-lived lifetimes.
 	///
-	/// Slower allocation and deallocation but reallocation is less expensive than for ShortLived.
+	/// Slower allocation and deallocation but reallocation is less expensive than for `ShortLived`.
 	MediumLived(BitSetAllocator<MS>),
 
 	/// Use this variant for contexts with long-lived lifetimes.

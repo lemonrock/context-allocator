@@ -367,12 +367,6 @@ mod MultipleBinarySearchTreeAllocatorTests
 		test_repeated_small_allocations(160);
 		test_repeated_small_allocations(192);
 		test_repeated_small_allocations(256);
-
-		// TODO: Optimization - split_blocks calls deallocate with a block size; deallocate then computes the same block_size.
-
-		// TODO: Optimization - can we use lower bound / upper bound rather than doing an insert in order to find blocks to coalesce?
-
-		// TODO: Do we actually need a loop and all the stuff above? Would we ever have more than 3 potentially coalescing blocks at once?
 	}
 
 	#[test]

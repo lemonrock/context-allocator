@@ -23,52 +23,25 @@ unsafe impl<'a, A: 'a + Allocator> GlobalAlloc for AllocatorAdaptor<'a, A>
 	#[inline(always)]
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let zero_size = layout.size_;
-
-		if unlikely!(zero_size == 0)
-		{
-			return A::ZeroSizedAllocation.as_ptr()
-		}
-
-		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
-		transmute(self.allocate(non_zero_size, layout.align_))
+		self.GlobalAlloc_alloc(layout)
 	}
 
 	#[inline(always)]
 	unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8
 	{
-		transmute(self.allocate_zeroed(layout))
+		self.GlobalAlloc_alloc_zeroed(layout)
 	}
 
 	#[inline(always)]
 	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout)
 	{
-		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
-
-		if unlikely!(ptr == A::ZeroSizedAllocation.as_ptr())
-		{
-			return
-		}
-
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let zero_size = layout.size_;
-		debug_assert_ne!(zero_size, 0, "It should not be possible for a `layout.size_` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
-		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
-
-		let current_memory = NonNull::new_unchecked(ptr);
-
-		self.deallocate(non_zero_size,layout.align_, current_memory)
+		self.GlobalAlloc_dealloc(ptr, layout)
 	}
 
 	#[inline(always)]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8
 	{
-		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
-
-		transmute(self.reallocate(NonNull::new_unchecked(ptr), layout, new_size))
+		self.GlobalAlloc_realloc(ptr, layout, new_size)
     }
 }
 
@@ -77,102 +50,49 @@ unsafe impl<'a, A: 'a + Allocator> Alloc for AllocatorAdaptor<'a, A>
 	#[inline(always)]
 	unsafe fn alloc(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		if unlikely!(layout.size_ == 0)
-		{
-			return Ok(A::ZeroSizedAllocation)
-		}
-		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
-		self.allocate(non_zero_size, layout.align_)
+		self.Alloc_alloc(layout)
 	}
 
 	#[inline(always)]
 	unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
 	{
-		self.allocate_zeroed(layout)
+		self.Alloc_alloc_zeroed(layout)
 	}
 
 	#[inline(always)]
 	unsafe fn dealloc(&mut self, ptr: MemoryAddress, layout: Layout)
 	{
-		if unlikely!(ptr == A::ZeroSizedAllocation)
-		{
-			return
-		}
-
-		let layout = LayoutHack::access_private_fields(layout);
-		debug_assert_ne!(layout.size_, 0, "It should not be possible for a `layout.size_` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
-
-		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
-		self.deallocate(non_zero_size, layout.align_, ptr)
+		self.Alloc_dealloc(ptr, layout)
 	}
 
 	#[inline(always)]
 	unsafe fn realloc(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
-		self.reallocate(ptr, layout, new_size)
+		self.Alloc_realloc(ptr, layout, new_size)
 	}
 
 	#[inline(always)]
 	unsafe fn alloc_excess(&mut self, layout: Layout) -> Result<Excess, AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		if unlikely!(layout.size_ == 0)
-		{
-			return Ok(Excess(A::ZeroSizedAllocation, 0))
-		}
-		let size = layout.size_;
-		let non_zero_size = NonZeroUsize::new_unchecked(size);
-
-		let result = self.allocate(non_zero_size, layout.align_);
-
-		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
-		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
-		let pointer: *mut u8 = transmute(result);
-		if unlikely!(pointer.is_null())
-		{
-			Err(AllocErr)
-		}
-		else
-		{
-			Ok(Excess(NonNull::new_unchecked(pointer), size))
-		}
+		self.Alloc_alloc_excess(layout)
 	}
 
 	#[inline(always)]
 	unsafe fn realloc_excess(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
 	{
-		let result = self.reallocate(ptr, layout, new_size);
-
-		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
-		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
-		let pointer: *mut u8 = transmute(result);
-		if unlikely!(pointer.is_null())
-		{
-			Err(AllocErr)
-		}
-		else
-		{
-			Ok(Excess(NonNull::new_unchecked(pointer), new_size))
-		}
+		self.Alloc_realloc_excess(ptr, layout, new_size)
 	}
 
 	#[inline(always)]
-	unsafe fn grow_in_place(&mut self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn grow_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		let size_ = layout.size_;
-		debug_assert!(new_size >= size_, "new_size `{}` is less than layout.size_ `{}`", new_size, size_);
-		Err(CannotReallocInPlace)
+		self.Alloc_grow_in_place(ptr, layout, new_size)
     }
 
 	#[inline(always)]
-	unsafe fn shrink_in_place(&mut self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn shrink_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		let size_ = layout.size_;
-		debug_assert!(new_size <= size_, "layout.size_ `{}` is less than new_size `{}`", size_, new_size);
-		Err(CannotReallocInPlace)
+		self.Alloc_shrink_in_place(ptr, layout, new_size)
     }
 }
 

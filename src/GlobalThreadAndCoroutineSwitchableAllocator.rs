@@ -29,6 +29,11 @@ static GLOBAL: AllocatorAdaptor<GlobalThreadAndCoroutineSwitchableAllocator<Bump
 	AllocatorAdaptor(&X)
 };
 
+// TODO: Initialize new thread and context allocators
+// TODO: How to drop allocators on thread death, context death
+
+
+
 unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 }
