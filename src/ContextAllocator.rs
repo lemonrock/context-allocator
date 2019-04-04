@@ -15,7 +15,7 @@ pub enum ContextAllocator<MS: MemorySource>
 	/// Very fast allocation and almost costless deallocation, at the expense of the strong likelihood of running out of memory.
 	///
 	/// Reallocation is very expensive when growing unless reallocating the most recently made allocation.
-	ShortLived(BumpAllocator),
+	ShortLived(BumpAllocator<MS>),
 
 	/// Use this variant for contexts with slightly longer than short-lived lifetimes.
 	///

@@ -16,11 +16,24 @@
 ///
 /// This allocator is not thread-safe.
 #[derive(Debug)]
-pub struct BumpAllocator
+pub struct BumpAllocator<MS: MemorySource>
 {
 	most_recent_allocation_pointer: Cell<MemoryAddress>,
 	next_allocation_at_pointer: Cell<MemoryAddress>,
 	ends_at_pointer: MemoryAddress,
+
+	memory_source: MS,
+	memory_source_size: NonZeroUsize,
+}
+
+impl<MS: MemorySource> Drop for BumpAllocator<MS>
+{
+	#[inline(always)]
+	fn drop(&mut self)
+	{
+		let allocations_start_from = self.ends_at_pointer.subtract_non_zero(self.memory_source_size);
+		self.memory_source.release(self.memory_source_size, allocations_start_from)
+	}
 }
 
 macro_rules! allocation_ends_at_pointer
@@ -50,7 +63,7 @@ macro_rules! allocation_ends_at_pointer
 	}
 }
 
-impl Allocator for BumpAllocator
+impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -112,19 +125,27 @@ impl Allocator for BumpAllocator
 	}
 }
 
-impl BumpAllocator
+impl<MS: MemorySource> BumpAllocator<MS>
 {
 	const MaximumPowerOfTwoAlignment: NonZeroUsize = non_zero_usize(4096);
 
 	/// New instance wrapping a block of memory.
 	#[inline(always)]
-	pub fn new(starts_at: MemoryAddress, non_zero_size: NonZeroUsize) -> Self
+	pub fn new(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
 	{
-		Self
-		{
-			most_recent_allocation_pointer: Cell::new(starts_at),
-			next_allocation_at_pointer: Cell::new(starts_at),
-			ends_at_pointer: starts_at.add(non_zero_size.get()),
-		}
+		let allocations_start_from = memory_source.obtain(memory_source_size)?;
+
+		Ok
+		(
+			Self
+			{
+				most_recent_allocation_pointer: Cell::new(allocations_start_from),
+				next_allocation_at_pointer: Cell::new(allocations_start_from),
+				ends_at_pointer: allocations_start_from.add_non_zero(memory_source_size),
+
+				memory_source,
+				memory_source_size,
+			}
+		)
 	}
 }

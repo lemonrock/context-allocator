@@ -29,6 +29,12 @@
 //! * `MemoryMapAllocator`, a mmap allocator with support for NUMA policies.
 //! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs.
 //!
+//! Allocators use a `MemorySource` to obtain and release memory.
+//! Memory sources provided include:-
+//!
+//! * `MemoryMapAllocator`, useful for thread-local allocators as it can obtain memory from NUMA-local memory.
+//! * `ArenaMemorySource`, an arena of fixed blocks which is itself backed by a memory source; this is useful as a source for the `BumpAllocator` and `BitSetAllocator` when used for contexts.
+//!
 //! Additionally a number of adaptors are provided:-
 //!
 //! * `AllocatorAdaptor`, an adaptor of `Allocator` to `GlobalAlloc` and `Alloc`; use it by calling `Allocator.adapt()`
@@ -61,10 +67,12 @@ extern crate either;
 #[cfg(any(target_os = "android", target_os = "linux"))] extern crate syscall_alt;
 
 
+use self::arena_memory_source::*;
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::bit_set::*;
 use self::extensions::*;
+use self::mmap::*;
 use self::mmap::numa::*;
 use ::either::*;
 #[cfg(unix)] use ::libc::*;
