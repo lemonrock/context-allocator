@@ -83,6 +83,7 @@ use ::std::alloc::GlobalAlloc;
 use ::std::alloc::Alloc;
 use ::std::alloc::AllocErr;
 use ::std::alloc::Excess;
+use ::std::alloc::System;
 use ::std::collections::Bound;
 use ::std::collections::Bound::*;
 use ::std::cell::Cell;

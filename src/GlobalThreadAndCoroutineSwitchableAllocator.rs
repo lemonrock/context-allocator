@@ -17,25 +17,91 @@ pub struct GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator: 
 #[thread_local] static mut coroutine_local_allocator_state: AllocatorState = AllocatorState::new("coroutine local");
 #[thread_local] static mut thread_local_allocator_state: AllocatorState = AllocatorState::new("thread local");
 
-use ::std::alloc::System;
-static GLOBAL: AllocatorAdaptor<GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>>> =
-{
-	static X: GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>> = GlobalThreadAndCoroutineSwitchableAllocator
-	{
-		global_allocator: GlobalAllocToAllocatorAdaptor(System),
-		marker: PhantomData,
-	};
+static GLOBAL: GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>> = GlobalThreadAndCoroutineSwitchableAllocator::new_reusing_system_allocator();
 
-	AllocatorAdaptor(&X)
-};
-
-// TODO: Initialize new thread and context allocators
-// TODO: How to drop allocators on thread death, context death
 
 
 
 unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
+}
+
+unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> GlobalAlloc for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+{
+	#[inline(always)]
+	unsafe fn alloc(&self, layout: Layout) -> *mut u8
+	{
+		self.GlobalAlloc_alloc(layout)
+	}
+
+	#[inline(always)]
+	unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8
+	{
+		self.GlobalAlloc_alloc_zeroed(layout)
+	}
+
+	#[inline(always)]
+	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout)
+	{
+		self.GlobalAlloc_dealloc(ptr, layout)
+	}
+
+	#[inline(always)]
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8
+	{
+		self.GlobalAlloc_realloc(ptr, layout, new_size)
+    }
+}
+
+unsafe impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Alloc for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+{
+	#[inline(always)]
+	unsafe fn alloc(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	{
+		self.Alloc_alloc(layout)
+	}
+
+	#[inline(always)]
+	unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	{
+		self.Alloc_alloc_zeroed(layout)
+	}
+
+	#[inline(always)]
+	unsafe fn dealloc(&mut self, ptr: MemoryAddress, layout: Layout)
+	{
+		self.Alloc_dealloc(ptr, layout)
+	}
+
+	#[inline(always)]
+	unsafe fn realloc(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	{
+		self.Alloc_realloc(ptr, layout, new_size)
+	}
+
+	#[inline(always)]
+	unsafe fn alloc_excess(&mut self, layout: Layout) -> Result<Excess, AllocErr>
+	{
+		self.Alloc_alloc_excess(layout)
+	}
+
+	#[inline(always)]
+	unsafe fn realloc_excess(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
+	{
+		self.Alloc_realloc_excess(ptr, layout, new_size)
+	}
+
+	#[inline(always)]
+	unsafe fn grow_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	{
+		self.Alloc_grow_in_place(ptr, layout, new_size)
+    }
+
+	#[inline(always)]
+	unsafe fn shrink_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	{
+		self.Alloc_shrink_in_place(ptr, layout, new_size)
+    }
 }
 
 impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
@@ -112,10 +178,27 @@ impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, Global
 
 impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
-	/// TODO: Initialize thread and coroutine allocators.
-	pub fn initialize_current_thread_allocator()
+	/// Create a new new instance suitable for use in a static global.
+	#[inline(always)]
+	pub const fn new(global_allocator: GlobalAllocator) -> Self
 	{
+		Self
+		{
+			global_allocator,
+			marker: PhantomData,
+		}
+	}
 
+	// TODO: Initialize new thread and context allocators
+// TODO: How to drop allocators on thread death, context death
+
+	// TODO: ? Use factories ?
+
+	/// Create a new instance suitable for use in a static global which re-uses the system allocator.
+	#[inline(always)]
+	pub const fn new_reusing_system_allocator() -> GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocToAllocatorAdaptor<System>>
+	{
+		Self::new(GlobalAllocToAllocatorAdaptor(System))
 	}
 
 	/// Obtain the current coroutine local allocator.

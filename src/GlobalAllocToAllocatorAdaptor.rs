@@ -3,7 +3,7 @@
 
 
 /// Adapts implementations of `GlobalAlloc` to `Allocator`.
-pub struct GlobalAllocToAllocatorAdaptor<GA: GlobalAlloc>(GA);
+pub struct GlobalAllocToAllocatorAdaptor<GA: GlobalAlloc>(pub GA);
 
 impl<GA: GlobalAlloc> Debug for GlobalAllocToAllocatorAdaptor<GA>
 {
