@@ -5,6 +5,8 @@
 /// NUMA nodes to allocate on.
 ///
 /// If set to no nodes (the `Default::default()`) then memory is allocated on the local node if possible.
+///
+/// Ignored on operating systems other than Android and Linux.
 #[derive(Default, Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct NumaNodeBitSet
 {
@@ -48,6 +50,7 @@ impl NumaNodeBitSet
 		self.bits &= !(1 << (zero_based_node_index as usize))
 	}
 
+	#[cfg(any(target_os = "android", target_os = "linux"))]
 	#[inline(always)]
 	fn mask_and_size(&self) -> (i32, Option<usize>, usize)
 	{

@@ -3,6 +3,8 @@
 
 
 /// Defaults to `Default`.
+///
+/// Ignored on operating systems other than Android and Linux.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum NumaAllocationPolicy
 {
@@ -67,6 +69,7 @@ impl Default for NumaAllocationPolicy
 
 impl NumaAllocationPolicy
 {
+	#[cfg(any(target_os = "android", target_os = "linux"))]
 	#[inline(always)]
 	fn values(&self) -> (i32, (i32, Option<usize>, usize))
 	{

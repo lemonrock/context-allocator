@@ -2,7 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// This allocator allocates memory-mapped data.
+/// This allocator allocates memory-mapped data, optionally using NUMA policy to allocate on a memory node closest to the current thread.
 ///
 /// It is slow and uses system calls.
 ///
@@ -13,7 +13,7 @@
 /// When dropped, any memory allocated with this allocator is ***NOT*** freed.
 ///
 /// However, it is appropriate as a 'backing store' for other allocators.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct MemoryMapAllocator
 {
 	map_flags: i32,
@@ -21,20 +21,8 @@ pub struct MemoryMapAllocator
 	#[cfg(not(any(target_os = "android", target_os = "netbsd", target_os = "linux")))] lock: bool,
 
 	#[cfg(any(target_os = "android", target_os = "linux"))] madvise_flags: i32,
-}
 
-impl Default for HugePageSize
-{
-	#[inline(always)]
-	fn default() -> Self
-	{
-		HugePageSize::None
-	}
-}
-
-impl HugePageSize
-{
-	const MAP_HUGE_SHIFT: i32 = 26;
+	#[cfg(any(target_os = "android", target_os = "linux"))] numa_settings: Option<NumaSettings>,
 }
 
 impl Default for MemoryMapAllocator
@@ -42,12 +30,8 @@ impl Default for MemoryMapAllocator
 	#[inline(always)]
 	fn default() -> Self
 	{
-		Self::new(true, true, true, false, HugePageSize::default())
+		Self::new(true, true, true, false, HugePageSize::default(), None)
 	}
-}
-
-impl LargeAllocator for MemoryMapAllocator
-{
 }
 
 impl Allocator for MemoryMapAllocator
@@ -92,14 +76,18 @@ impl MemoryMapAllocator
 	/// * `prefault`: Should allocated memory be pre-faulted, ie all pages loaded and made resident in RAM when allocation occurs? This slows down allocation but make subsequent accesses faster. Only on Android, FreeBSD and Linux.
 	/// * `do_not_reserve_swap_space`: Do not reserve swap space for the mapping. Only on Android, Linux and NetBSD.
 	/// * `allocate_within_first_32Gb`: Useful for stacks and creating executable code. Only on Android, FreeBSD and Linux on 64-bit CPUs.
+	/// * `huge_page_size`: Huge page size to use with Transparent Huge Pages (THP). On operating systems other than Android and Linux, specifying a huge page size has no effect.
+	/// * `numa_settings`: NUMA policy settings for optimizing memory allocations to the nearest node. On operating systems other than Android and Linux, specifying a value has no effect.
+	#[allow(dead_code)]
 	#[inline(always)]
-	pub fn new(lock: bool, prefault: bool, do_not_reserve_swap_space: bool, allocate_within_first_32Gb: bool, huge_page_size: HugePageSize) -> Self
+	pub fn new(lock: bool, prefault: bool, do_not_reserve_swap_space: bool, allocate_within_first_32Gb: bool, huge_page_size: HugePageSize, numa_settings: Option<NumaSettings>) -> Self
 	{
 		Self
 		{
 			map_flags: Self::map_flags(lock, prefault, do_not_reserve_swap_space, allocate_within_first_32Gb, huge_page_size),
 			#[cfg(not(any(target_os = "android", target_os = "netbsd", target_os = "linux")))] lock,
 			#[cfg(any(target_os = "android", target_os = "linux"))] madvise_flags: Self::madvise_flags(huge_page_size),
+			#[cfg(any(target_os = "android", target_os = "linux"))] numa_settings,
 		}
 	}
 
@@ -119,9 +107,11 @@ impl MemoryMapAllocator
 		{
 			#[cfg(any(target_os = "android", target_os = "linux"))] self.madvise_memory(result, size)?;
 
+			#[cfg(any(target_os = "android", target_os = "linux"))] self.numa_memory(result, size)?;
+
 			#[cfg(not(any(target_os = "android", target_os = "netbsd", target_os = "linux")))] self.mlock_memory(result, size)?;
 
-			Ok(result.non_null().cast::<u8>())
+			Ok(Self::cast_address(result))
 		}
 	}
 
@@ -135,7 +125,7 @@ impl MemoryMapAllocator
 		}
 		else if likely!(result == -1)
 		{
-			Self::munmap_memory(address.non_null().cast::<u8>(), size);
+			Self::munmap_memory(Self::cast_address(address), size);
 			return Err(AllocErr)
 		}
 		else
@@ -143,6 +133,27 @@ impl MemoryMapAllocator
 			unreachable!()
 		}
 		Ok(())
+	}
+
+	#[cfg(any(target_os = "android", target_os = "linux"))]
+	#[inline(always)]
+	fn numa_memory(&self, address: *mut c_void, size: usize) -> Result<(), AllocErr>
+	{
+		match self.numa_settings
+		{
+			None => Ok(()),
+
+			Some(ref numa_settings) =>
+			{
+				let outcome = numa_settings.post_allocate(address, size);
+				if unlikely!(outcome.is_err())
+				{
+					Self::munmap_memory(Self::cast_address(address), size);
+					return Err(AllocErr)
+				}
+				Ok(())
+			}
+		}
 	}
 
 	#[cfg(not(any(target_os = "android", target_os = "netbsd", target_os = "linux")))]
@@ -157,7 +168,7 @@ impl MemoryMapAllocator
 			}
 			else if likely!(result == -1)
 			{
-				Self::munmap_memory(address.non_null().cast::<u8>(), size);
+				Self::munmap_memory(Self::cast_address(address), size);
 				return Err(AllocErr)
 			}
 			else
@@ -182,7 +193,7 @@ impl MemoryMapAllocator
 		}
 		else
 		{
-			Ok(result.non_null().cast::<u8>())
+			Ok(Self::cast_address(result))
 		}
 	}
 
@@ -201,6 +212,12 @@ impl MemoryMapAllocator
 	fn munmap_memory(memory_address: MemoryAddress, size: usize)
 	{
 		unsafe { munmap(memory_address.as_ptr() as *mut _, size) };
+	}
+
+	#[inline(always)]
+	fn cast_address(address: *mut c_void) -> MemoryAddress
+	{
+		address.non_null().cast::<u8>()
 	}
 
 	#[inline(always)]

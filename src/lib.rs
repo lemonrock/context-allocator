@@ -25,8 +25,7 @@
 //! * `BitSetAllocator`, an allocator that uses a bit set of free blocks; uses 64-bit chunks to optimize searches.
 //! * `MultipleBinarySearchTreeAllocator`, an efficient allocator which minimizes fragmentation by using multiple red-black trees of free blocks which are aggresively defragmented.
 //! * `ContextAllocator`, a choice of either `BumpAllocator`, `BitSetAllocator` or `MultipleBinarySearchTreeAllocator`.
-//! * `MemoryMapAllocator`, a mmap allocator.
-//! * `NumaMemoryMapAllocator`, a NUMA-local mmap allocator.
+//! * `MemoryMapAllocator`, a mmap allocator with support for NUMA policies.
 //! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs.
 //!
 //! Additionally a number of adaptors are provided:-
@@ -65,7 +64,7 @@ use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::bit_set::*;
 use self::extensions::*;
-use self::regular_mmap_memory::*;
+use self::mmap::numa::*;
 use ::either::*;
 #[cfg(unix)] use ::libc::*;
 #[cfg(any(target_os = "android", target_os = "linux"))] use ::syscall_alt::syscalls::Syscall;
@@ -109,7 +108,6 @@ include!("ContextAllocator.rs");
 include!("CurrentAllocatorInUse.rs");
 include!("GlobalAllocToAllocatorAdaptor.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
-include!("LargeAllocator.rs");
 include!("MemoryAddress.rs");
 include!("MemoryRange.rs");
 include!("MultipleBinarySearchTreeAllocator.rs");
@@ -129,11 +127,6 @@ pub(crate) mod extensions;
 pub mod bit_set;
 
 
-/// NUMA memory mapping.
-#[cfg(any(target_os = "android", target_os = "linux"))]
-pub mod numa_mmap_memory;
-
-
-/// Regular memory mapping.
+/// A memory map (mmap) based allocator with support for NUMA.
 #[cfg(unix)]
-pub mod regular_mmap_memory;
+pub mod mmap;

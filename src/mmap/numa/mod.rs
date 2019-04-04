@@ -6,5 +6,5 @@ use super::*;
 
 
 include!("NumaAllocationPolicy.rs");
-include!("NumaMemoryMapAllocator.rs");
 include!("NumaNodeBitSet.rs");
+include!("NumaSettings.rs");
