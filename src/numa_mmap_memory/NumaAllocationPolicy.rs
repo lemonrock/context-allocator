@@ -68,13 +68,13 @@ impl Default for NumaAllocationPolicy
 impl NumaAllocationPolicy
 {
 	#[inline(always)]
-	fn values(&self) -> (i32, (i32, *const usize, usize))
+	fn values(&self) -> (i32, (i32, Option<usize>, usize))
 	{
 		use self::NumaAllocationPolicy::*;
 
 		match *self
 		{
-			Default => (0, (0, null(), 0)),
+			Default => (0, NumaNodeBitSet::no_mode_flags_nodemask_maxnode),
 
 			Preferred(ref numa_node_bit_set) => (1, numa_node_bit_set.mask_and_size()),
 
@@ -82,7 +82,7 @@ impl NumaAllocationPolicy
 
 			Interleave(ref numa_node_bit_set) => (3, numa_node_bit_set.mask_and_size()),
 
-			Local => (4, (0, null(), 0)),
+			Local => (4, NumaNodeBitSet::no_mode_flags_nodemask_maxnode),
 		}
 
 	}

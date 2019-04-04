@@ -5,5 +5,10 @@
 use super::*;
 
 
-include!("HugePageSize.rs");
-include!("MemoryMapAllocator.rs");
+/// An arena.
+pub struct Arena
+{
+
+}
+
+

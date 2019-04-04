@@ -22,9 +22,9 @@
 //! Allocators provided include:-
 //!
 //! * `BumpAllocator`, a never-freeing bump allocator with slight optimization for reallocating the last allocation.
-//! * `BitmapAllocator`, an allocator that uses a bitmap of free blocks.
+//! * `BitSetAllocator`, an allocator that uses a bit set of free blocks; uses 64-bit chunks to optimize searches.
 //! * `MultipleBinarySearchTreeAllocator`, an efficient allocator which minimizes fragmentation by using multiple red-black trees of free blocks which are aggresively defragmented.
-//! * `ContextAllocator`, a choice of either `BumpAllocator` or `MultipleBinarySearchTreeAllocator`.
+//! * `ContextAllocator`, a choice of either `BumpAllocator`, `BitSetAllocator` or `MultipleBinarySearchTreeAllocator`.
 //! * `MemoryMapAllocator`, a mmap allocator.
 //! * `NumaMemoryMapAllocator`, a NUMA-local mmap allocator.
 //! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs.
@@ -41,7 +41,13 @@
 //!
 //! ## Future
 //!
-//! * Investigate a bitmap allocator as an middle-ground between `BumpAllocator` and `MultipleBinarySearchTreeAllocator`; this has to use linear search to find contiguous ranges, and so will probably be too slow for larger memory regions.
+//! * Investigate using DPDK's allocator.
+//! * Investigate a B-tree backed allocator.
+//! * Investigate a design that uses multiple doubly-linked 'free' lists of blocks; blocks can be variable in size but the free list is sorted
+//! 	* Iteration over a particular free-list range may encountered blocks too small, or blocks so large they can be split up.
+//! 	* This design is similar to that used by DPDK.
+//! 	* To make the allocator multi-threaded, DPDK takes a spin lock on a particular 'heap', which is a set of free lists.
+//! * Investigate an arena allocator for fixed-size blocks (suitable for holding ready-to-rumble context allocators, say).
 //! * Investigate a fall-back over-size allocator for a thread-local allocator, which could use the `NumaMemoryMapAllocator` underneath.
 //! * Investigate supporting over-size allocations in `MultipleBinarySearchTreeAllocator` by scanning the largest binary search tree for contiguous blocks.
 //! * Investigate a persistent-memory backed allocator.
@@ -59,6 +65,7 @@ use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::bit_set::*;
 use self::extensions::*;
+use self::regular_mmap_memory::*;
 use ::either::*;
 #[cfg(unix)] use ::libc::*;
 #[cfg(any(target_os = "android", target_os = "linux"))] use ::syscall_alt::syscalls::Syscall;
@@ -102,9 +109,14 @@ include!("ContextAllocator.rs");
 include!("CurrentAllocatorInUse.rs");
 include!("GlobalAllocToAllocatorAdaptor.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
+include!("LargeAllocator.rs");
 include!("MemoryAddress.rs");
 include!("MemoryRange.rs");
 include!("MultipleBinarySearchTreeAllocator.rs");
+
+
+/// A specialized arena allocator.
+pub mod arena;
 
 
 pub(crate) mod binary_search_trees;

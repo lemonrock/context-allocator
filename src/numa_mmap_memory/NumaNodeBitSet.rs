@@ -25,6 +25,8 @@ pub struct NumaNodeBitSet
 
 impl NumaNodeBitSet
 {
+	const no_mode_flags_nodemask_maxnode: (i32, Option<usize>, usize) = (0, None, 0);
+
 	/// Is this the empty set?
 	#[inline(always)]
 	pub fn is_empty(&self) -> bool
@@ -47,11 +49,11 @@ impl NumaNodeBitSet
 	}
 
 	#[inline(always)]
-	fn mask_and_size(&self) -> (i32, *const usize, usize)
+	fn mask_and_size(&self) -> (i32, Option<usize>, usize)
 	{
 		if likely!(self.is_empty())
 		{
-			(0, null_mut(), 0)
+			Self::no_mode_flags_nodemask_maxnode
 		}
 		else
 		{
@@ -69,7 +71,7 @@ impl NumaNodeBitSet
 				mode_flags |= MPOL_F_RELATIVE_NODES
 			}
 
-			(mode_flags, &self.bits, size + 1)
+			(mode_flags, Some(self.bits), size + 1)
 		}
 	}
 }

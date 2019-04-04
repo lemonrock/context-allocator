@@ -107,6 +107,12 @@ impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, Global
 
 impl<CoroutineLocalAllocator: Allocator, ThreadLocalAllocator: Allocator, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
+	/// TODO: Initialize thread and coroutine allocators.
+	pub fn initialize_current_thread_allocator()
+	{
+
+	}
+
 	/// Obtain the current coroutine local allocator.
 	///
 	/// May not be valid, of course.

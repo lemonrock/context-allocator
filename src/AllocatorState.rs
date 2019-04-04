@@ -65,6 +65,8 @@ impl AllocatorState
 	#[inline(always)]
 	fn allocator<'a, A: 'a + Allocator>(&self) -> &'a A
 	{
+		debug_assert!(!self.allocator_instance.is_null(), "{} allocator is null", self.name);
+
 		unsafe { & * (self.allocator_instance as *const A) }
 	}
 
