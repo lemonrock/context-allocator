@@ -73,13 +73,13 @@ impl Allocator for MemoryMapAllocator
 	#[inline(always)]
 	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
-		Self::mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
+		self.mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
 	}
 
 	#[inline(always)]
 	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
 	{
-		Self::mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
+		self.mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
 	}
 }
 
@@ -93,7 +93,7 @@ impl MemoryMapAllocator
 	/// * `allocate_within_first_32Gb`: Useful for stacks and creating executable code. Only on Android, FreeBSD and Linux on 64-bit CPUs.
 	/// * `huge_page_size`: Huge page size to use with Transparent Huge Pages (THP). On operating systems other than Android and Linux, specifying a huge page size has no effect.
 	/// * `numa_settings`: NUMA policy settings for optimizing memory allocations to the nearest node. On operating systems other than Android and Linux, specifying a value has no effect.
-	#[allow(dead_code)]
+	#[allow(unused_variables)]
 	#[inline(always)]
 	pub fn new(lock: bool, prefault: bool, do_not_reserve_swap_space: bool, allocate_within_first_32Gb: bool, huge_page_size: HugePageSize, numa_settings: Option<NumaSettings>) -> Self
 	{
@@ -197,7 +197,7 @@ impl MemoryMapAllocator
 	/// `size` is rounded up to system page size.
 	#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
 	#[inline(always)]
-	fn mremap_memory(memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		#[cfg(target_os = "netbsd")] const MREMAP_MAYMOVE: i32 = 0;
 
@@ -214,9 +214,9 @@ impl MemoryMapAllocator
 
 	#[cfg(not(any(target_os = "android", target_os = "linux", target_os = "netbsd")))]
 	#[inline(always)]
-	fn mremap_memory(memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
-		let new_memory_address = Self::mmap_memory(new_size)?;
+		let new_memory_address = self.mmap_memory(new_size)?;
 		unsafe { new_memory_address.as_ptr().copy_from_nonoverlapping(memory_address.as_ptr() as *const _, old_size) };
 		Self::munmap_memory(memory_address, old_size);
 		Ok(new_memory_address)
@@ -235,6 +235,7 @@ impl MemoryMapAllocator
 		address.non_null().cast::<u8>()
 	}
 
+	#[allow(unused_variables)]
 	#[inline(always)]
 	fn map_flags(lock: bool, prefault: bool, do_not_reserve_swap_space: bool, allocate_within_first_32Gb: bool, huge_page_size: HugePageSize) -> i32
 	{
@@ -295,7 +296,14 @@ impl MemoryMapAllocator
 			map_flags
 		};
 
-		map_flags | (huge_page_size as i32)
+		if cfg!(any(target_os = "android", target_os = "linux"))
+		{
+			map_flags | (huge_page_size as i32)
+		}
+		else
+		{
+			map_flags
+		}
 	}
 
 	#[cfg(any(target_os = "android", target_os = "linux"))]

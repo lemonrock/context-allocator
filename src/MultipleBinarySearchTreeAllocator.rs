@@ -16,27 +16,33 @@
 /// This allocator NEVER grows or shrinks its memory region.
 ///
 /// This allocator is not thread-safe.
-pub struct MultipleBinarySearchTreeAllocator(BinarySearchTreesWithCachedKnowledgeOfFirstChild);
+pub struct MultipleBinarySearchTreeAllocator<MS: MemorySource>
+{
+	inner: BinarySearchTreesWithCachedKnowledgeOfFirstChild,
+	memory_source: MS,
+	allocations_start_from: MemoryAddress,
+	memory_source_size: NonZeroUsize,
+}
 
-impl Debug for MultipleBinarySearchTreeAllocator
+impl<MS: MemorySource> Drop for MultipleBinarySearchTreeAllocator<MS>
+{
+	#[inline(always)]
+	fn drop(&mut self)
+	{
+		self.memory_source.release(self.memory_source_size, self.allocations_start_from)
+	}
+}
+
+impl<MS: MemorySource> Debug for MultipleBinarySearchTreeAllocator<MS>
 {
 	#[inline(always)]
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result
 	{
-		self.0.fmt(f)
+		self.inner.fmt(f)
 	}
 }
 
-impl Default for MultipleBinarySearchTreeAllocator
-{
-	#[inline(always)]
-	fn default() -> Self
-	{
-		Self(BinarySearchTreesWithCachedKnowledgeOfFirstChild::default())
-	}
-}
-
-impl Allocator for MultipleBinarySearchTreeAllocator
+impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
@@ -208,25 +214,30 @@ impl Allocator for MultipleBinarySearchTreeAllocator
 	}
 }
 
-impl MultipleBinarySearchTreeAllocator
+impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 {
-	/// Calling this more than once is legal (but odd; blocks will not be coalesced), but calling it more than once with overlapping slices is not.
-	///
 	/// If the provided memory's length is not a multiple of 2, then the remainder is unused.
 	///
 	/// The provided memory must be at least as long as the minimum block size.
 	///
 	/// The memory must be aligned to `BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment`, which is the same as the size of a `Node`.
-	#[inline(always)]
-	pub fn make_use_of(&mut self, memory: &mut [u8])
+	pub fn new(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
 	{
-		let mut size = memory.len();
-		debug_assert_ne!(size, 0, "size can not be zero");
+		debug_assert_ne!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees, 0, "There must be at least one binary search tree");
 
-		let mut memory_address = memory.as_mut_ptr().non_null();
+		let allocations_start_from = memory_source.obtain(memory_source_size)?;
+		let mut memory_address = allocations_start_from;
 		debug_assert!(memory_address.is_aligned_to(BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment), "memory is not aligned to `{:?}`", BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment);
 
-		debug_assert_ne!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees, 0, "There must be at least one binary search stree");
+		let this = Self
+		{
+			inner: BinarySearchTreesWithCachedKnowledgeOfFirstChild::default(),
+			memory_source,
+			allocations_start_from,
+			memory_source_size,
+		};
+
+		let mut size = memory_source_size.get();
 		let mut last_binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees;
 		while likely!(last_binary_search_tree_index > 0)
 		{
@@ -245,7 +256,7 @@ impl MultipleBinarySearchTreeAllocator
 				continue
 			}
 
-			let binary_search_tree = self.binary_search_tree_for(binary_search_tree_index);
+			let binary_search_tree = this.binary_search_tree_for(binary_search_tree_index);
 			while
 			{
 				binary_search_tree.insert_memory_address(memory_address);
@@ -259,6 +270,8 @@ impl MultipleBinarySearchTreeAllocator
 			}
 			last_binary_search_tree_index = binary_search_tree_index;
 		}
+
+		Ok(this)
 	}
 
 	#[inline(always)]
@@ -335,7 +348,7 @@ impl MultipleBinarySearchTreeAllocator
 	#[inline(always)]
 	fn binary_search_tree_for(&self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
-		self.0.binary_search_tree_for(binary_search_tree_index)
+		self.inner.binary_search_tree_for(binary_search_tree_index)
 	}
 }
 
@@ -343,8 +356,6 @@ impl MultipleBinarySearchTreeAllocator
 mod MultipleBinarySearchTreeAllocatorTests
 {
 	use super::*;
-	use ::std::alloc::Global;
-	use ::std::slice::from_raw_parts_mut;
 
 	#[test]
 	pub fn repeated_small_allocations()
@@ -367,15 +378,13 @@ mod MultipleBinarySearchTreeAllocatorTests
 	#[test]
 	pub fn mixed_allocations()
 	{
-		let (mut allocator, memory) = new_allocator(256);
+		let allocator = new_allocator(256);
 
 		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(128.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
-		assert_allocator_is_empty(&mut allocator);
-
-		destroy_memory(memory)
+		assert_allocator_is_empty(&allocator);
 	}
 
 	#[test]
@@ -384,7 +393,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 		const AllocationSize: usize = 32;
 		const MemoryPattern: [u8; AllocationSize] = [0x0A; AllocationSize];
 
-		let (mut allocator, memory) = new_allocator(256);
+		let allocator = new_allocator(256);
 
 		let mut allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocation.write(MemoryPattern);
@@ -392,25 +401,21 @@ mod MultipleBinarySearchTreeAllocatorTests
 		let reallocation = allocator.shrinking_reallocate(16.non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
 		assert_eq!(allocation, reallocation, "Did not shrink allocation within block");
 		assert_eq!(reallocation.read::<[u8; AllocationSize]>(), MemoryPattern, "Did not preserve memory contents when shrinking block");
-
-		destroy_memory(memory)
 	}
 
 	#[test]
 	pub fn shrink_allocation_within_block_and_deallocate_unused_block()
 	{
-		let (mut allocator, memory) = new_allocator(64);
+		let allocator = new_allocator(64);
 
 		let original_allocation = allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
-		assert_allocator_is_empty(&mut allocator);
+		assert_allocator_is_empty(&allocator);
 
 		let reallocation = allocator.shrinking_reallocate(32.non_zero(), 8.non_zero(), 64.non_zero(), original_allocation).expect(&format!("Did not reallocate"));
 		assert_eq!(original_allocation, reallocation, "Did not shrink allocation within block");
 
 		let _allocation = allocator.allocate(32.non_zero(), 8.non_zero()).expect(&format!("Did not allocate recently freed block"));
-		assert_allocator_is_empty(&mut allocator);
-
-		destroy_memory(memory)
+		assert_allocator_is_empty(&allocator);
 	}
 
 	#[test]
@@ -419,16 +424,14 @@ mod MultipleBinarySearchTreeAllocatorTests
 		const AllocationSize: usize = 32;
 		const MemoryPattern: [u8; AllocationSize] = [0x0A; AllocationSize];
 
-		let (mut allocator, memory) = new_allocator(64);
+		let allocator = new_allocator(64);
 
-		let mut allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocation.write(MemoryPattern);
 
 		let reallocation = allocator.growing_reallocate((AllocationSize + 1).non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
 		assert_eq!(allocation, reallocation, "Did not shrink allocation within block");
 		assert_eq!(reallocation.read::<[u8; AllocationSize]>(), MemoryPattern, "Did not preserve memory contents when growing block");
-
-		destroy_memory(memory)
 	}
 
 	#[test]
@@ -436,60 +439,36 @@ mod MultipleBinarySearchTreeAllocatorTests
 	{
 		const AllocationSize: usize = 31;
 
-		let (mut allocator, memory) = new_allocator(32);
+		let allocator = new_allocator(32);
 		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
-		assert_allocator_is_empty(&mut allocator);
+		assert_allocator_is_empty(&allocator);
 
 		allocator.deallocate(AllocationSize.non_zero(), 8.non_zero(), allocation);
 		let _allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
-		assert_allocator_is_empty(&mut allocator);
-
-		destroy_memory(memory)
+		assert_allocator_is_empty(&allocator);
 	}
 
 	fn test_repeated_small_allocations(memory_size: usize)
 	{
-		let (mut allocator, memory) = new_allocator(memory_size);
+		let allocator = new_allocator(memory_size);
 
 		for allocation_loop_count in 0 .. memory_size / SmallestAllocation
 		{
 			let _ = allocator.allocate(1.non_zero(), 1.non_zero()).expect(&format!("Did not allocate for loop `{}`", allocation_loop_count));
 		}
-		assert_allocator_is_empty(&mut allocator);
-
-		destroy_memory(memory)
+		assert_allocator_is_empty(&allocator);
 	}
 
-	fn assert_allocator_is_empty(allocator: &mut MultipleBinarySearchTreeAllocator)
+	fn assert_allocator_is_empty(allocator: &MultipleBinarySearchTreeAllocator<MemoryMapAllocator>)
 	{
 		assert_eq!(allocator.allocate(1.non_zero(), 1.non_zero()), Err(AllocErr), "Allocator was not empty");
 	}
 
-	fn new_allocator<'a>(memory_size: usize) -> (MultipleBinarySearchTreeAllocator, (Layout, &'a mut [u8]))
+	fn new_allocator<'a>(memory_size: usize) -> MultipleBinarySearchTreeAllocator<MemoryMapAllocator>
 	{
-		let mut allocator = MultipleBinarySearchTreeAllocator::default();
-
-		let (some_memory, layout) = unsafe
-		{
-			let layout = layout(memory_size);
-			let memory_address = Global.alloc(layout).unwrap();
-			let some_memory = from_raw_parts_mut(memory_address.as_ptr(), memory_size);
-			(some_memory, layout)
-		};
-
-		allocator.make_use_of(some_memory);
-
-		(allocator, (layout, some_memory))
-	}
-
-	fn destroy_memory((layout, some_memory): (Layout, &mut [u8]))
-	{
-		unsafe { Global.dealloc(some_memory.as_ptr().non_null(), layout) };
-	}
-
-	unsafe fn layout(memory_size: usize) -> Layout
-	{
-		Layout::from_size_align_unchecked(memory_size, SmallestAllocation)
+		let memory_source = MemoryMapAllocator::default();
+		let allocator = MultipleBinarySearchTreeAllocator::new(memory_source, memory_size.non_zero()).unwrap();
+		allocator
 	}
 
 	const SmallestAllocation: usize = BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAllocationSize.get();

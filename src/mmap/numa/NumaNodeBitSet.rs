@@ -27,7 +27,7 @@ pub struct NumaNodeBitSet
 
 impl NumaNodeBitSet
 {
-	const no_mode_flags_nodemask_maxnode: (i32, Option<usize>, usize) = (0, None, 0);
+	#[allow(dead_code)] const no_mode_flags_nodemask_maxnode: (i32, Option<usize>, usize) = (0, None, 0);
 
 	/// Is this the empty set?
 	#[inline(always)]

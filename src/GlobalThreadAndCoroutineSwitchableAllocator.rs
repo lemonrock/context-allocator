@@ -18,9 +18,9 @@ pub struct GlobalThreadAndCoroutineSwitchableAllocator<CoroutineLocalAllocator: 
 #[thread_local] static mut thread_local_allocator_state: AllocatorState = AllocatorState::new("thread local");
 
 use ::std::alloc::System;
-static GLOBAL: AllocatorAdaptor<GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, BumpAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>>> =
+static GLOBAL: AllocatorAdaptor<GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>>> =
 {
-	static X: GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, BumpAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>> = GlobalThreadAndCoroutineSwitchableAllocator
+	static X: GlobalThreadAndCoroutineSwitchableAllocator<BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>> = GlobalThreadAndCoroutineSwitchableAllocator
 	{
 		global_allocator: GlobalAllocToAllocatorAdaptor(System),
 		marker: PhantomData,

@@ -10,5 +10,4 @@ include!("MemoryMapAllocator.rs");
 
 
 /// NUMA memory mapping.
-#[cfg(any(target_os = "android", target_os = "linux"))]
 pub mod numa;

@@ -23,7 +23,7 @@ pub enum ContextAllocator<MS: MemorySource>
 	MediumLived(BitSetAllocator<MS>),
 
 	/// Use this variant for contexts with long-lived lifetimes.
-	LongLived(MultipleBinarySearchTreeAllocator),
+	LongLived(MultipleBinarySearchTreeAllocator<MS>),
 }
 
 impl<MS: MemorySource> Allocator for ContextAllocator<MS>
