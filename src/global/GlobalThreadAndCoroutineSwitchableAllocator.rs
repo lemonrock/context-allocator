@@ -29,6 +29,8 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator: Sync + GlobalAlloc + Allo
 	/// Drops the thread local allocator.
 	///
 	/// Panics in debug if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
+	///
+	/// Could be made hidden by using a destructor with `libc::pthread_key_create()` for an otherwise unused key.
 	#[inline(always)]
 	fn drop_thread_local_allocator(&self);
 

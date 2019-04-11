@@ -14,9 +14,9 @@ repository = "https://github.com/lemonrock/context-allocator.git"
 exclude = ["*"]
 include = ["README.md", "LICENSE", "COPYRIGHT", "src/**/*.rs", "Cargo.toml", "rustfmt.toml", "clippy.toml"]
 readme = "README.md"
-publish = false
+publish = true
 edition = '2018'
-version = "0.0.0"
+version = "0.1.0"
 
 [dependencies]
 either = "^1.5.2"

@@ -50,6 +50,7 @@
 //!
 //! ## Future
 //!
+//! * Investigate wrapping [Rampant Pixel's Memory Allocator](https://github.com/rampantpixels/rpmalloc).
 //! * Investigate using DPDK's allocator.
 //! * Investigate a B-tree backed allocator.
 //! * Investigate a design that uses multiple doubly-linked 'free' lists of blocks; blocks can be variable in size but the free list is sorted
