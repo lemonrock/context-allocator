@@ -2,9 +2,18 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-#[allow(unused_imports)] use super::*;
+/// Records which allocator is currently in use for `Global` allocations.
+///
+/// This does not affect reallocations or deallocations in any way.
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum CurrentAllocatorInUse
+{
+	/// A coroutine local allocator.
+	CoroutineLocal,
 
+	/// A thread local allocator.
+	ThreadLocal,
 
-include!("NumaAllocationPolicy.rs");
-include!("NumaNodeBitSet.rs");
-include!("NumaSettings.rs");
+	/// A global allocator.
+	Global,
+}

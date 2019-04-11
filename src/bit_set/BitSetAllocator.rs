@@ -164,11 +164,50 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 }
 
+impl<MS: MemorySource> LocalAllocator for BitSetAllocator<MS>
+{
+	#[inline(always)]
+	fn memory_range(&self) -> MemoryRange
+	{
+		MemoryRange::new(self.allocations_start_from, self.allocations_end_at)
+	}
+}
+
 impl<MS: MemorySource> BitSetAllocator<MS>
 {
+	/// New instance wrapping a block of memory for an 8 byte block size.
+	#[inline(always)]
+	pub fn new_by_amount_8(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	{
+		Self::new_by_amount(memory_source, 8usize.non_zero(), memory_source_size)
+	}
+
+	/// New instance wrapping a block of memory for a 16 byte block size.
+	#[inline(always)]
+	pub fn new_by_amount_16(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	{
+		Self::new_by_amount(memory_source, 16usize.non_zero(), memory_source_size)
+	}
+
+	/// New instance wrapping a block of memory for a 32 byte block size.
+	#[inline(always)]
+	pub fn new_by_amount_32(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	{
+		Self::new_by_amount(memory_source, 32usize.non_zero(), memory_source_size)
+	}
+
+	/// Create a new instance by memory size and block size.
+	#[inline(always)]
+	pub fn new_by_amount(memory_source: MS, block_size: NonZeroUsize, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	{
+		let number_of_blocks = ((memory_source_size.get() + (block_size.get() - 1)) / block_size.get()).non_zero();
+
+		Self::new(memory_source, block_size, number_of_blocks)
+	}
+
 	/// Create a new instance.
 	#[inline(always)]
-	pub fn new(block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, memory_source: MS) -> Result<Self, AllocErr>
+	pub fn new(memory_source: MS, block_size: NonZeroUsize, number_of_blocks: NonZeroUsize) -> Result<Self, AllocErr>
 	{
 		debug_assert!(block_size.is_power_of_two(), "block_size `{:?}` must be a power of 2", block_size);
 		debug_assert!(block_size.get() >= BitSetWord::SizeInBytes, "block_size `{:?}` must at least `{:?}` so that the bit set metadata holding free blocks can be allocated contiguous with the memory used for blocks", block_size, BitSetWord::SizeInBytes);

@@ -9,6 +9,7 @@
 #![deny(unreachable_patterns)]
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
+#![feature(const_fn)]
 #![feature(core_intrinsics)]
 #![feature(extern_types)]
 #![feature(thread_local)]
@@ -19,6 +20,8 @@
 //! This provides allocators suitable for a number of use cases.
 //!
 //! All of these allocators implement the traits `::std::alloc::GlobalAlloc` and `::std::alloc::Alloc`, as we as a common base trait, `Allocator`.
+//!
+//! The most useful is a global allocator which allows switching between thread, coroutine and global (and thuse lockable) memory allocators, using the macro `global_thread_and_coroutine_switchable_allocator()`.
 //!
 //! Allocators provided include:-
 //!
@@ -67,12 +70,13 @@ extern crate either;
 #[cfg(any(target_os = "android", target_os = "linux"))] extern crate syscall_alt;
 
 
-use self::arena_memory_source::*;
+#[cfg(test)] use self::arena_memory_source::*;
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::bit_set::*;
 use self::extensions::*;
-use self::mmap::*;
+use self::global::*;
+#[cfg(test)] use self::mmap::*;
 use self::mmap::numa::*;
 use ::either::*;
 #[cfg(unix)] use ::libc::*;
@@ -83,7 +87,7 @@ use ::std::alloc::GlobalAlloc;
 use ::std::alloc::Alloc;
 use ::std::alloc::AllocErr;
 use ::std::alloc::Excess;
-use ::std::alloc::System;
+#[cfg(test)] use ::std::alloc::System;
 use ::std::collections::Bound;
 use ::std::collections::Bound::*;
 use ::std::cell::Cell;
@@ -93,7 +97,6 @@ use ::std::cmp::Ordering;
 use ::std::fmt;
 use ::std::fmt::Debug;
 use ::std::fmt::Formatter;
-use ::std::marker::PhantomData;
 use ::std::mem::align_of;
 use ::std::mem::size_of;
 use ::std::mem::transmute;
@@ -109,21 +112,6 @@ use ::std::ptr::null;
 use ::std::ptr::null_mut;
 
 
-include!("Allocator.rs");
-include!("AllocatorAdaptor.rs");
-include!("AllocatorState.rs");
-include!("AllocToAllocatorAdaptor.rs");
-include!("BumpAllocator.rs");
-include!("ContextAllocator.rs");
-include!("CurrentAllocatorInUse.rs");
-include!("GlobalAllocToAllocatorAdaptor.rs");
-include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
-include!("MemoryAddress.rs");
-include!("MemoryRange.rs");
-include!("MemorySource.rs");
-include!("MultipleBinarySearchTreeAllocator.rs");
-
-
 /// A memory source which uses an arena.
 pub mod arena_memory_source;
 
@@ -131,13 +119,35 @@ pub mod arena_memory_source;
 pub(crate) mod binary_search_trees;
 
 
+/// A bit set based allocator; allows reallocations, but requires a linear scan to find free blocks.
+pub mod bit_set;
+
+
 pub(crate) mod extensions;
 
 
-/// A bit set based allocator; allows reallocations, but requires a linear scan to find free blocks.
-pub mod bit_set;
+/// Global, switchable allocator.
+#[macro_use] pub mod global;
 
 
 /// A memory map (mmap) based allocator with support for NUMA.
 #[cfg(unix)]
 pub mod mmap;
+
+
+include!("alloc.rs");
+include!("global_alloc.rs");
+
+
+include!("Allocator.rs");
+include!("AllocatorAdaptor.rs");
+include!("AllocToAllocatorAdaptor.rs");
+include!("BumpAllocator.rs");
+include!("ContextAllocator.rs");
+include!("GlobalAllocToAllocatorAdaptor.rs");
+include!("MemoryAddress.rs");
+include!("MemorySource.rs");
+include!("MultipleBinarySearchTreeAllocator.rs");
+
+
+#[cfg(test)] global_thread_and_coroutine_switchable_allocator!(MyGlobalAllocator, BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>, GlobalAllocToAllocatorAdaptor(System));

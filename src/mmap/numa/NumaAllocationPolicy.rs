@@ -33,7 +33,7 @@ pub enum NumaAllocationPolicy
 	/// This mode specifies a strict policy that restricts memory allocation to the nodes specified in nodemask.
 	///
 	/// Page allocations will come from the node in the NUMA node node bit set with sufficient free memory that is closest to the node where the allocation takes place.
-	/// Pages will not be allocated from any node not specified in the  NUMA node node bit set.
+	/// Pages will not be allocated from any node not specified in the NUMA node node bit set.
 	Bind(NumaNodeBitSet),
 
 	/// `MPOL_INTERLEAVE`.

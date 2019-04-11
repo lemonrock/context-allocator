@@ -88,3 +88,21 @@ impl<MS: MemorySource> Allocator for ContextAllocator<MS>
 		}
 	}
 }
+
+impl<MS: MemorySource> LocalAllocator for ContextAllocator<MS>
+{
+	#[inline(always)]
+	fn memory_range(&self) -> MemoryRange
+	{
+		use self::ContextAllocator::*;
+
+		match *self
+		{
+			ShortLived(ref allocator) => allocator.memory_range(),
+
+			MediumLived(ref allocator) => allocator.memory_range(),
+
+			LongLived(ref allocator) => allocator.memory_range(),
+		}
+	}
+}

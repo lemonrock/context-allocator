@@ -4,8 +4,6 @@
 
 pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 {
-	const InvalidOn64BitMaximum: Self;
-
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
 	{
@@ -208,8 +206,6 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 
 impl NonNullU8Ext for MemoryAddress
 {
-	const InvalidOn64BitMaximum: Self = unsafe { NonNull::new_unchecked(::std::usize::MAX as *mut u8) };
-
 	#[inline(always)]
 	fn to_non_null_u8(self) -> NonNull<u8>
 	{

@@ -2,9 +2,30 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-#[allow(unused_imports)] use super::*;
+/// Represents a memory range for which an allocator can allocate.
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct MemoryRange
+{
+	from: MemoryAddress,
+	to: MemoryAddress,
+}
 
+impl MemoryRange
+{
+	/// Create a new instance.
+	#[inline(always)]
+	pub const fn new(from: MemoryAddress, to: MemoryAddress) -> Self
+	{
+		Self
+		{
+			from,
+			to,
+		}
+	}
 
-include!("NumaAllocationPolicy.rs");
-include!("NumaNodeBitSet.rs");
-include!("NumaSettings.rs");
+	#[inline(always)]
+	fn contains(&self, from_memory_address: MemoryAddress) -> bool
+	{
+		from_memory_address >= self.from && from_memory_address < self.to
+	}
+}

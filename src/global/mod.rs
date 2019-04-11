@@ -2,19 +2,12 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// Records which allocator is currently in use for `Global` allocations.
-///
-/// This does not affect reallocations or deallocations in any way.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum CurrentAllocatorInUse
-{
-	/// A coroutine local allocator.
-	CoroutineLocal,
+use super::*;
 
-	/// A thread local allocator.
-	ThreadLocal,
 
-	/// A global allocator.
-	Global,
-}
-
+include!("CurrentAllocatorInUse.rs");
+include!("global_thread_and_coroutine_switchable_allocator.rs");
+include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
+include!("LocalAllocator.rs");
+include!("MemoryRange.rs");
+include!("PerThreadState.rs");

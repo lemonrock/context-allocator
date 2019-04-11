@@ -31,8 +31,7 @@ impl<MS: MemorySource> Drop for BumpAllocator<MS>
 	#[inline(always)]
 	fn drop(&mut self)
 	{
-		let allocations_start_from = self.ends_at_pointer.subtract_non_zero(self.memory_source_size);
-		self.memory_source.release(self.memory_source_size, allocations_start_from)
+		self.memory_source.release(self.memory_source_size, self.allocations_start_from())
 	}
 }
 
@@ -125,6 +124,15 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 	}
 }
 
+impl<MS: MemorySource> LocalAllocator for BumpAllocator<MS>
+{
+	#[inline(always)]
+	fn memory_range(&self) -> MemoryRange
+	{
+		MemoryRange::new(self.allocations_start_from(), self.ends_at_pointer)
+	}
+}
+
 impl<MS: MemorySource> BumpAllocator<MS>
 {
 	const MaximumPowerOfTwoAlignment: NonZeroUsize = non_zero_usize(4096);
@@ -147,5 +155,11 @@ impl<MS: MemorySource> BumpAllocator<MS>
 				memory_source_size,
 			}
 		)
+	}
+
+	#[inline(always)]
+	fn allocations_start_from(&self) -> MemoryAddress
+	{
+		self.ends_at_pointer.subtract_non_zero(self.memory_source_size)
 	}
 }

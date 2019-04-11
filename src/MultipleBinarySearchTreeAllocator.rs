@@ -214,6 +214,15 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 }
 
+impl<MS: MemorySource> LocalAllocator for MultipleBinarySearchTreeAllocator<MS>
+{
+	#[inline(always)]
+	fn memory_range(&self) -> MemoryRange
+	{
+		MemoryRange::new(self.allocations_start_from, self.allocations_start_from.add_non_zero(self.memory_source_size))
+	}
+}
+
 impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 {
 	/// If the provided memory's length is not a multiple of 2, then the remainder is unused.
@@ -389,7 +398,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 
 		let allocator = new_allocator(256);
 
-		let mut allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocation.write(MemoryPattern);
 
 		let reallocation = allocator.shrinking_reallocate(16.non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
