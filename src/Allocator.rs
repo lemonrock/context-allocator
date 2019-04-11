@@ -160,12 +160,12 @@ pub trait Allocator: Debug + Sized
 
 	#[doc(hidden)]
 	#[inline(always)]
-    unsafe fn GlobalAlloc_realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8
+	unsafe fn GlobalAlloc_realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8
 	{
 		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
 
 		transmute(self.reallocate(NonNull::new_unchecked(ptr), layout, new_size))
-    }
+	}
 
 	#[doc(hidden)]
 	#[inline(always)]
@@ -264,7 +264,7 @@ pub trait Allocator: Debug + Sized
 		let size_ = layout.size_;
 		debug_assert!(new_size >= size_, "new_size `{}` is less than layout.size_ `{}`", new_size, size_);
 		Err(CannotReallocInPlace)
-    }
+	}
 
 	#[doc(hidden)]
 	#[inline(always)]
@@ -274,5 +274,5 @@ pub trait Allocator: Debug + Sized
 		let size_ = layout.size_;
 		debug_assert!(new_size <= size_, "layout.size_ `{}` is less than new_size `{}`", size_, new_size);
 		Err(CannotReallocInPlace)
-    }
+	}
 }

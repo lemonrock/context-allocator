@@ -78,9 +78,9 @@ macro_rules! global_thread_and_coroutine_switchable_allocator
 
 					match self.save_current_allocator_in_use()
 					{
-						CoroutineLocal => self.coroutine_local_allocator().allocate(non_zero_size, non_zero_power_of_two_alignment),
+						CoroutineLocal => self.coroutine_local_allocator().expect("Should have assigned a coroutine local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
 
-						ThreadLocal => self.thread_local_allocator().allocate(non_zero_size, non_zero_power_of_two_alignment),
+						ThreadLocal => self.thread_local_allocator().expect("Should have assigned a thread local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
 
 						Global => self.global_allocator().allocate(non_zero_size, non_zero_power_of_two_alignment),
 					}
@@ -148,15 +148,15 @@ macro_rules! global_thread_and_coroutine_switchable_allocator
 				}
 
 				#[inline(always)]
-				fn coroutine_local_allocator(&self) -> &Self::CoroutineLocalAllocator
+				fn coroutine_local_allocator(&self) -> Option<&Self::CoroutineLocalAllocator>
 				{
-					unsafe { per_thread_state.coroutine_local_allocator.as_ref().expect("Call `initialize_coroutine_local_allocator()` first") }
+					unsafe { per_thread_state.coroutine_local_allocator.as_ref() }
 				}
 
 				#[inline(always)]
-				fn thread_local_allocator(&self) -> &Self::ThreadLocalAllocator
+				fn thread_local_allocator(&self) -> Option<&Self::ThreadLocalAllocator>
 				{
-					unsafe { per_thread_state.thread_local_allocator.as_ref().expect("Call `initialize_thread_local_allocator()` first") }
+					unsafe { per_thread_state.thread_local_allocator.as_ref() }
 				}
 
 				#[inline(always)]
@@ -176,16 +176,20 @@ macro_rules! choose_allocator
 	($self: ident, $current_memory: ident, $callback: ident, $($argument: ident),*) =>
 	{
 		{
-			let coroutine_local_allocator = $self.coroutine_local_allocator();
-			if likely!(coroutine_local_allocator.contains($current_memory))
+			if let Some(coroutine_local_allocator) = $self.coroutine_local_allocator()
 			{
-				return coroutine_local_allocator.$callback($($argument, )*)
+				if likely!(coroutine_local_allocator.contains($current_memory))
+				{
+					return coroutine_local_allocator.$callback($($argument, )*)
+				}
 			}
 
-			let thread_local_allocator = $self.thread_local_allocator();
-			if likely!(thread_local_allocator.contains($current_memory))
+			if let Some(thread_local_allocator) = $self.thread_local_allocator()
 			{
-				return thread_local_allocator.$callback($($argument, )*)
+				if likely!(thread_local_allocator.contains($current_memory))
+				{
+					return thread_local_allocator.$callback($($argument, )*)
+				}
 			}
 
 			$self.global_allocator().$callback($($argument, )*)

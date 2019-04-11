@@ -40,17 +40,15 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator: Sync + GlobalAlloc + Allo
 	#[inline(always)]
 	fn restore_current_allocator_in_use(&self, restore_to: CurrentAllocatorInUse);
 
-	/// Obtain the current coroutine local allocator.
-	///
-	/// Panics in debug if no coroutine local allocator has been initialized with `initialize_coroutine_local_allocator()`.
+	/// Obtain the current coroutine local allocator, if any.
 	#[inline(always)]
-	fn coroutine_local_allocator(&self) -> &Self::CoroutineLocalAllocator;
+	fn coroutine_local_allocator(&self) -> Option<&Self::CoroutineLocalAllocator>;
 
 	/// Obtain the thread local allocator.
 	///
-	/// Panics in debug if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
+	/// None if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
 	#[inline(always)]
-	fn thread_local_allocator(&self) -> &Self::ThreadLocalAllocator;
+	fn thread_local_allocator(&self) -> Option<&Self::ThreadLocalAllocator>;
 
 	/// Obtain the global allocator.
 	#[inline(always)]

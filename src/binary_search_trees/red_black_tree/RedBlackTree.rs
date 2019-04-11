@@ -127,133 +127,133 @@ impl RedBlackTree
 		}
 	}
 
-    /// Constructs a double-ended iterator over a sub-range of elements in the tree, starting at `minimum`, and ending at `maximum`.
-    ///
-    /// If `minimum` is `Unbounded`, then it will be treated as "negative infinity", and if `maximum` is `Unbounded`, then it will be treated as "positive infinity".
-    /// Thus `range(Unbounded, Unbounded)` will yield the whole collection, and so is a more expensive choise than using `double_ended_iterate()`.
+	/// Constructs a double-ended iterator over a sub-range of elements in the tree, starting at `minimum`, and ending at `maximum`.
+	///
+	/// If `minimum` is `Unbounded`, then it will be treated as "negative infinity", and if `maximum` is `Unbounded`, then it will be treated as "positive infinity".
+	/// Thus `range(Unbounded, Unbounded)` will yield the whole collection, and so is a more expensive choise than using `double_ended_iterate()`.
 	///
 	/// If `maximum` is less than `minimum` then an empty iterator is returned.
 	/// If `maximum` or `minimum` is not found then a then an empty iterator is returned.
 	///
 	/// Creating the iterator itself is not efficient.
 	#[allow(dead_code)]
-    #[inline(always)]
-    pub(crate) fn double_ended_range_iterate<'a>(&'a self, minimum: Bound<MemoryAddress>, maximum: Bound<MemoryAddress>) -> RedBlackTreeDoubleEndedIterator<'a>
-    {
-        let lower = self.lower_bound(minimum);
-        let upper = self.upper_bound(maximum);
-        if likely!(lower.is_not_null() && upper.is_not_null())
+	#[inline(always)]
+	pub(crate) fn double_ended_range_iterate<'a>(&'a self, minimum: Bound<MemoryAddress>, maximum: Bound<MemoryAddress>) -> RedBlackTreeDoubleEndedIterator<'a>
+	{
+		let lower = self.lower_bound(minimum);
+		let upper = self.upper_bound(maximum);
+		if likely!(lower.is_not_null() && upper.is_not_null())
 		{
-            let lower_key = lower.key();
-            let upper_key = upper.key();
+			let lower_key = lower.key();
+			let upper_key = upper.key();
 
-            if upper_key >= lower_key
+			if upper_key >= lower_key
 			{
-                RedBlackTreeDoubleEndedIterator
+				RedBlackTreeDoubleEndedIterator
 				{
-                    head: lower,
-                    tail: upper,
-                    tree: self,
-                }
-            }
+					head: lower,
+					tail: upper,
+					tree: self,
+				}
+			}
 			else
 			{
 				self.empty_iterator()
 			}
-        }
+		}
 		else
 		{
 			self.empty_iterator()
 		}
-    }
+	}
 
 	/// Returns a `NodePointer` pointing to an element with the given key.
 	///
 	/// If no such element is found then a null `NodePointer` is returned.
-    #[inline(always)]
+	#[inline(always)]
 	pub(crate) fn find(&self, key: MemoryAddress) -> NodePointer
-    {
+	{
 		use self::Ordering::*;
 
-        let mut tree = self.root;
-        while tree.is_not_null()
+		let mut tree = self.root;
+		while tree.is_not_null()
 		{
-            match key.cmp(&tree.key())
+			match key.cmp(&tree.key())
 			{
-                Less => tree = tree.left(),
-                Equal => return tree,
-                Greater => tree = tree.right(),
-            }
-        }
+				Less => tree = tree.left(),
+				Equal => return tree,
+				Greater => tree = tree.right(),
+			}
+		}
 
-        NodePointer::default()
-    }
+		NodePointer::default()
+	}
 
 	/// Returns a `NodePointer` pointing to the first element whose key is above the given bound.
 	///
 	/// If no such element is found then a null `NodePointer` is returned.
 	#[allow(dead_code)]
-    #[inline(always)]
+	#[inline(always)]
 	pub(crate) fn lower_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
-    {
-        let mut tree = self.root;
-        let mut result = NodePointer::default();
-        while tree.is_not_null()
+	{
+		let mut tree = self.root;
+		let mut result = NodePointer::default();
+		while tree.is_not_null()
 		{
 			let cond = match bound
 			{
-                Unbounded => true,
+				Unbounded => true,
 
-                Included(key) => key <= tree.key(),
+				Included(key) => key <= tree.key(),
 
-                Excluded(key) => key < tree.key(),
-            };
+				Excluded(key) => key < tree.key(),
+			};
 
-            if cond
+			if cond
 			{
-                result = tree;
-                tree = tree.left();
-            }
+				result = tree;
+				tree = tree.left();
+			}
 			else
 			{
-                tree = tree.right();
-            }
-        }
-        result
-    }
+				tree = tree.right();
+			}
+		}
+		result
+	}
 
 	/// Returns a `NodePointer` pointing to the last element whose key is below the given bound.
 	///
 	/// If no such element is found then a null `NodePointer` is returned.
 	#[allow(dead_code)]
-    #[inline(always)]
-    pub(crate) fn upper_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
-    {
-        let mut tree = self.root;
-        let mut result = NodePointer::default();
-        while tree.is_not_null()
+	#[inline(always)]
+	pub(crate) fn upper_bound(&self, bound: Bound<MemoryAddress>) -> NodePointer
+	{
+		let mut tree = self.root;
+		let mut result = NodePointer::default();
+		while tree.is_not_null()
 		{
-            let cond = match bound
+			let cond = match bound
 			{
-                Unbounded => false,
+				Unbounded => false,
 
-                Included(key) => key < tree.key(),
+				Included(key) => key < tree.key(),
 
-                Excluded(key) => key <= tree.key(),
-            };
+				Excluded(key) => key <= tree.key(),
+			};
 
-            if cond
+			if cond
 			{
-                tree = tree.left();
-            }
+				tree = tree.left();
+			}
 			else
 			{
-                result = tree;
-                tree = tree.right();
-            }
-        }
-        result
-    }
+				result = tree;
+				tree = tree.right();
+			}
+		}
+		result
+	}
 
 	#[inline(always)]
 	fn empty_iterator<'a>(&'a self) -> RedBlackTreeDoubleEndedIterator<'a>
