@@ -2,20 +2,15 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// Useful extensions.
-pub(crate) trait PointerMutExt<T>: PointerExt<T>
-{
-	/// Mutable reference.
-	fn mutable_reference<'a>(self) -> &'a mut T;
-}
-
-impl<T> PointerMutExt<T> for *mut T
+pub(crate) trait NonNullU8NodePointer: NonNullU8Ext
 {
 	#[inline(always)]
-	fn mutable_reference<'a>(self) -> &'a mut T
+	fn node_pointer(self) -> NodePointer
 	{
-		debug_assert!(self.is_not_null(), "null pointers can not be derefenced");
-
-		unsafe { &mut * self }
+		NodePointer::from_memory_address(self.to_non_null_u8())
 	}
+}
+
+impl NonNullU8NodePointer for NonNull<u8>
+{
 }

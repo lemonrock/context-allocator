@@ -125,7 +125,8 @@ pub(crate) mod binary_search_trees;
 pub mod bit_set;
 
 
-pub(crate) mod extensions;
+/// Extensions useful for working with memory; not a stable part of the API of this crate.
+pub mod extensions;
 
 
 /// Global, switchable allocator.

@@ -2,10 +2,13 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// Extensions to make working with NonNull easier.
 pub(crate) trait NonNullExt<T>
 {
+	/// To a reference.
 	fn reference<'any>(self) -> &'any T;
 
+	/// To a mutable reference.
 	fn mutable_reference<'any>(self) -> &'any mut T;
 }
 

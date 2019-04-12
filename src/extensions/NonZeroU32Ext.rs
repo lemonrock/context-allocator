@@ -2,26 +2,31 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// Useful extensions.
 pub(crate) trait NonZeroU32Ext: Sized + Copy
 {
+	/// Add.
 	#[inline(always)]
 	fn checked_add(self, increment: Self) -> Option<Self>
 	{
 		self.to_u32().checked_add(increment.to_u32()).map(Self::non_zero_unchecked)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_assign(&mut self, increment: Self)
 	{
 		*self = Self::non_zero_unchecked(self.to_u32() + increment.to_u32())
 	}
 
+	/// Next power of two.
 	#[inline(always)]
 	fn next_power_of_two(self) -> Self
 	{
 		Self::non_zero_unchecked(self.to_u32().next_power_of_two())
 	}
 
+	/// Non zero.
 	#[inline(always)]
 	fn non_zero(value: u32) -> Self
 	{
@@ -30,6 +35,7 @@ pub(crate) trait NonZeroU32Ext: Sized + Copy
 		Self::non_zero_unchecked(value)
 	}
 
+	/// Non zero.
 	fn non_zero_unchecked(value: u32) -> Self;
 
 	#[doc(hidden)]

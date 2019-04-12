@@ -2,28 +2,36 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// Useful extensions.
 pub(crate) trait PointerExt<T>: Sized
 {
+	/// Non null.
 	fn non_null(self) -> NonNull<T>;
 
+	/// Add.
 	fn add_bytes(self, offset: usize) -> Self;
 
+	/// Add.
 	#[inline(always)]
 	fn add_bytes_u32(self, offset: u32) -> Self
 	{
 		self.add_bytes(offset as usize)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_bytes_non_zero_u32(self, offset: NonZeroU32) -> Self
 	{
 		self.add_bytes_u32(offset.get())
 	}
 
+	/// To usize.
 	fn to_usize(self) -> usize;
 
+	/// Is not null.
 	fn is_not_null(self) -> bool;
 
+	/// Reference.
 	fn reference<'a>(self) -> &'a T;
 }
 

@@ -2,14 +2,17 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
+/// Useful extensions.
+pub trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 {
+	/// Next power of two.
 	#[inline(always)]
 	fn next_power_of_two(self) -> Self
 	{
 		Self::non_zero_unchecked(self.to_usize().next_power_of_two())
 	}
 
+	/// Round up.
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
 	{
@@ -21,6 +24,7 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		Self::non_zero(self.add(power_of_two_less_one).to_usize() & !power_of_two_less_one)
 	}
 
+	/// Round down.
 	#[inline(always)]
 	fn round_down_to_power_of_two(self, power_of_two: NonZeroUsize) -> usize
 	{
@@ -30,6 +34,7 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		value & !((1 << power_of_two_exponent) - 1)
 	}
 
+	/// Divide.
 	#[inline(always)]
 	fn divide_power_of_two_by_power_of_two(self, divisor: NonZeroUsize) -> usize
 	{
@@ -39,48 +44,56 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		self.to_usize() >> divisor.logarithm_base2()
 	}
 
+	/// Is power of two.
 	#[inline(always)]
 	fn is_power_of_two(self) -> bool
 	{
 		self.to_usize().is_power_of_two()
 	}
 
+	/// Logarithm base two.
 	#[inline(always)]
 	fn logarithm_base2(self) -> usize
 	{
 		self.to_usize().trailing_zeros() as usize
 	}
 
-	#[inline(always)]
-	fn add(self, increment: usize) -> Self
-	{
-		Self::non_zero(self.to_usize() + increment)
-	}
-
+	/// Decrement.
 	#[inline(always)]
 	fn decrement(self) -> usize
 	{
 		self.to_usize() - 1
 	}
 
+	/// Add.
+	#[inline(always)]
+	fn add(self, increment: usize) -> Self
+	{
+		Self::non_zero(self.to_usize() + increment)
+	}
+
+	/// Add.
 	#[inline(always)]
 	fn checked_add(self, increment: usize) -> Option<Self>
 	{
 		self.to_usize().checked_add(increment).map(Self::non_zero)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_assign(&mut self, increment: usize)
 	{
 		*self = (*self).add(increment)
 	}
 
+	/// Double.
 	#[inline(always)]
 	fn doubled(self) -> NonZeroUsize
 	{
 		(self.to_usize() << 1).non_zero()
 	}
 
+	/// Difference.
 	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
@@ -89,24 +102,28 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		self.to_usize() - other.to_usize()
 	}
 
+	/// Difference.
 	#[inline(always)]
 	fn difference_non_zero(self, other: Self) -> NonZeroUsize
 	{
 		self.difference(other).non_zero()
 	}
 
+	/// Multiply.
 	#[inline(always)]
 	fn multiply(self, other: Self) -> NonZeroUsize
 	{
 		(self.to_usize() * other.to_usize()).non_zero()
 	}
 
+	/// Is odd.
 	#[inline(always)]
 	fn is_odd(self) -> bool
 	{
 		self.to_usize().is_odd()
 	}
 
+	/// Non zero.
 	#[inline(always)]
 	fn to_non_zero_u32(self) -> NonZeroU32
 	{
@@ -115,9 +132,7 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		NonZeroU32::non_zero_unchecked(usize as u32)
 	}
 
-	#[doc(hidden)]
-	fn to_usize(self) -> usize;
-
+	/// Non zero.
 	#[inline(always)]
 	fn non_zero(value: usize) -> Self
 	{
@@ -126,7 +141,11 @@ pub(crate) trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 		Self::non_zero_unchecked(value)
 	}
 
+	/// Non zero.
 	fn non_zero_unchecked(value: usize) -> Self;
+
+	#[doc(hidden)]
+	fn to_usize(self) -> usize;
 }
 
 impl NonZeroUsizeExt for NonZeroUsize
@@ -140,14 +159,14 @@ impl NonZeroUsizeExt for NonZeroUsize
 	}
 
 	#[inline(always)]
-	fn to_usize(self) -> usize
-	{
-		self.get()
-	}
-
-	#[inline(always)]
 	fn non_zero_unchecked(value: usize) -> Self
 	{
 		non_zero_usize(value)
+	}
+
+	#[inline(always)]
+	fn to_usize(self) -> usize
+	{
+		self.get()
 	}
 }

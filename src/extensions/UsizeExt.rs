@@ -2,14 +2,17 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
+/// Useful extensions.
+pub trait UsizeExt: Sized + Copy + Ord + Debug
 {
+	/// Is odd.
 	#[inline(always)]
 	fn is_odd(self) -> bool
 	{
 		self.to_usize() & 0b1 == 0b1
 	}
 
+	/// Round up.
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> usize
 	{
@@ -23,6 +26,7 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 		(value + power_of_two_less_one) & !power_of_two_less_one
 	}
 
+	/// Round down.
 	#[inline(always)]
 	fn round_down_to_power_of_two(self, power_of_two: NonZeroUsize) -> usize
 	{
@@ -30,6 +34,7 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 		self.round_down_to_power_of_two_exponent(power_of_two_exponent)
 	}
 
+	/// Round down to power of two exponent.
 	#[inline(always)]
 	fn round_down_to_power_of_two_exponent(self, power_of_two_exponent: usize) -> usize
 	{
@@ -38,6 +43,7 @@ pub(crate) trait UsizeExt: Sized + Copy + Ord + Debug
 		value & !((1 << power_of_two_exponent) - 1)
 	}
 
+	/// Non zero.
 	#[inline(always)]
 	fn non_zero(self) -> NonZeroUsize
 	{

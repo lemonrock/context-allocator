@@ -2,44 +2,52 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
+/// Extensions to make working with NonNull<u8> easier.
+pub trait NonNullU8Ext: Sized + Copy + Ord + Debug
 {
+	/// Round up to power of two.
 	#[inline(always)]
 	fn round_up_to_power_of_two(self, non_zero_power_of_two_alignment: NonZeroUsize) -> Self
 	{
 		Self::from_usize(self.to_usize().non_zero().round_up_to_power_of_two(non_zero_power_of_two_alignment).to_usize())
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add(self, increment: usize) -> Self
 	{
 		Self::from_usize(self.to_usize() + increment)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_non_zero(self, increment: NonZeroUsize) -> Self
 	{
 		Self::from_usize(self.to_usize() + increment.get())
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn checked_add(self, increment: usize) -> Option<Self>
 	{
 		self.to_usize().checked_add(increment).map(Self::from_usize)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_assign(&mut self, increment: usize)
 	{
 		*self = (*self).add(increment)
 	}
 
+	/// Add.
 	#[inline(always)]
 	fn add_assign_non_zero(&mut self, increment: NonZeroUsize)
 	{
 		self.add_assign(increment.get())
 	}
 
+	/// Subtract.
 	#[inline(always)]
 	fn subtract(self, decrement: usize) -> Self
 	{
@@ -49,12 +57,14 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		Self::from_usize(usize - decrement)
 	}
 
+	/// Subtract.
 	#[inline(always)]
 	fn subtract_non_zero(self, decrement: NonZeroUsize) -> Self
 	{
 		self.subtract(decrement.get())
 	}
 
+	/// Difference.
 	#[inline(always)]
 	fn difference(self, other: Self) -> usize
 	{
@@ -63,6 +73,7 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.to_usize() - other.to_usize()
 	}
 
+	/// Difference.
 	#[inline(always)]
 	fn difference_u32(self, other: Self) -> u32
 	{
@@ -71,30 +82,35 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		difference_usize as u32
 	}
 
+	/// Difference.
 	#[inline(always)]
 	fn difference_u32_non_zero(self, other: Self) -> NonZeroU32
 	{
 		NonZeroU32::non_zero(self.difference_u32(other))
 	}
 
+	/// Read.
 	#[inline(always)]
 	fn read<V: Copy>(self) -> V
 	{
 		unsafe { (self.to_pointer() as *const V).read() }
 	}
 
+	/// Read.
 	#[inline(always)]
 	fn read_u64(self) -> u64
 	{
 		self.read::<u64>()
 	}
 
+	/// Write.
 	#[inline(always)]
 	fn write<V: Copy>(self, value: V)
 	{
 		unsafe { (self.to_pointer() as *mut V).write(value) }
 	}
 
+	/// Write and advance.
 	#[inline(always)]
 	fn write_and_advance<V: Copy>(&mut self, value: V)
 	{
@@ -102,6 +118,7 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.add_assign(size_of::<V>())
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn or_u64(self, bits_to_set: u64)
 	{
@@ -109,6 +126,7 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.write::<u64>(current_value | bits_to_set)
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn and_u64(self, bits_to_preserve: u64)
 	{
@@ -116,16 +134,20 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.write::<u64>(current_value & bits_to_preserve)
 	}
 
+	#[doc(hidden)]
 	const BitsInAByte: usize = 8;
 
+	#[doc(hidden)]
 	const BitsInAnU64: usize = size_of::<u64>() * Self::BitsInAByte;
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn set_bottom_bits_of_u64(self, number_of_bits_to_set: usize)
 	{
 		self.set_middle_bits_of_u64(number_of_bits_to_set, number_of_bits_to_set)
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn set_middle_bits_of_u64(self, number_of_bits_to_set: usize, number_of_lower_bits: usize)
 	{
@@ -139,18 +161,21 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.or_u64(((1 << number_of_bits_to_set) - 1) << (number_of_lower_bits - number_of_bits_to_set));
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn set_top_bits_of_u64(self, number_of_bits_to_set: usize)
 	{
 		self.set_middle_bits_of_u64(number_of_bits_to_set, Self::BitsInAnU64 as usize)
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn unset_bottom_bits_of_u64(self, number_of_bits_to_unset: usize)
 	{
 		self.unset_middle_bits_of_u64(number_of_bits_to_unset, number_of_bits_to_unset)
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn unset_middle_bits_of_u64(self, number_of_bits_to_unset: usize, number_of_lower_bits: usize)
 	{
@@ -166,12 +191,14 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		self.and_u64(bits_to_preserve);
 	}
 
+	#[doc(hidden)]
 	#[inline(always)]
 	fn unset_top_bits_of_u64(self, number_of_bits_to_unset: usize)
 	{
 		self.unset_middle_bits_of_u64(number_of_bits_to_unset, Self::BitsInAnU64 as usize)
 	}
 
+	/// Is aligned to.
 	#[inline(always)]
 	fn is_aligned_to(self, non_zero_power_of_two_alignment: NonZeroUsize) -> bool
 	{
@@ -179,12 +206,6 @@ pub(crate) trait NonNullU8Ext: Sized + Copy + Ord + Debug
 		let bitmask = non_zero_power_of_two_alignment.get() - 1;
 
 		value & bitmask == 0
-	}
-
-	#[inline(always)]
-	fn node_pointer(self) -> NodePointer
-	{
-		NodePointer::from_memory_address(self.to_non_null_u8())
 	}
 
 	#[doc(hidden)]

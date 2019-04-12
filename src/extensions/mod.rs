@@ -11,6 +11,7 @@ include!("non_null_pointer.rs");
 include!("non_zero_usize.rs");
 include!("NonNullExt.rs");
 include!("NonNullU8Ext.rs");
+include!("NonNullU8NodePointer.rs");
 include!("NonZeroU32Ext.rs");
 include!("NonZeroUsizeExt.rs");
 include!("PointerExt.rs");

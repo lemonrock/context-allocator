@@ -2,14 +2,17 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// Useful extensions.
 pub(crate) trait U64Ext: Sized + Copy + Ord + Debug
 {
+	/// Round down to power of two exponent (usize).
 	#[inline(always)]
 	fn round_down_to_power_of_two_exponent_usize(self, power_of_two_exponent: usize) -> u64
 	{
 		self.round_down_to_power_of_two_exponent(power_of_two_exponent as u64)
 	}
 
+	/// Round down to power of two exponent (u64).
 	#[inline(always)]
 	fn round_down_to_power_of_two_exponent(self, power_of_two_exponent: u64) -> u64
 	{
