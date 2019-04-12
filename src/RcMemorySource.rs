@@ -23,6 +23,17 @@ impl<MS: MemorySource> MemorySource for RcMemorySource<MS>
 	}
 }
 
+impl<MS: MemorySource> Deref for RcMemorySource<MS>
+{
+	type Target = MS;
+
+	#[inline(always)]
+	fn deref(&self) -> &Self::Target
+	{
+		&self.0
+	}
+}
+
 impl<MS: MemorySource> RcMemorySource<MS>
 {
 	/// Creates a new thread-local instance.
