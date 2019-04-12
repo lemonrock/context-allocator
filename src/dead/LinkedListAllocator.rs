@@ -46,7 +46,7 @@ impl LinkedListAllocator
 impl Allocator for LinkedListAllocator
 {
 	#[inline(always)]
-	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
+	fn allocate(&mut self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		let end_of_all_blocks_non_null = self.end_of_all_blocks_non_null;
 
@@ -68,7 +68,7 @@ impl Allocator for LinkedListAllocator
 	}
 
 	#[inline(always)]
-	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _current_memory: NonNull<u8>)
+	fn deallocate(&mut self, _non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _current_memory: MemoryAddress)
 	{
 		// Given current memory, we would have to walk (forward) through the singly linked list until we were just after it; then insert it; then coalesce it (rightward then leftware) as appropriate
 

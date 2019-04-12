@@ -45,7 +45,7 @@ impl<MS: MemorySource> Debug for MultipleBinarySearchTreeAllocator<MS>
 impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<NonNull<u8>, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
 	{
 		macro_rules! try_to_allocate_exact_size_block
 		{
@@ -147,7 +147,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
 	{
 		let block_size = Self::block_size(non_zero_size);
 
@@ -164,7 +164,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<NonNull<u8>, AllocErr>
 	{
 		debug_assert!(non_zero_new_size > non_zero_current_size, "non_zero_new_size `{}` should be greater than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
@@ -201,7 +201,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<NonNull<u8>, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<NonNull<u8>, AllocErr>
 	{
 		debug_assert!(non_zero_new_size < non_zero_current_size, "non_zero_new_size `{}` should be less than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
