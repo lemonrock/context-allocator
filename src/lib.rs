@@ -111,6 +111,7 @@ use ::std::ops::SubAssign;
 use ::std::ptr::NonNull;
 use ::std::ptr::null;
 use ::std::ptr::null_mut;
+use ::std::rc::Rc;
 
 
 /// A memory source which uses an arena.
@@ -149,6 +150,7 @@ include!("GlobalAllocToAllocatorAdaptor.rs");
 include!("MemoryAddress.rs");
 include!("MemorySource.rs");
 include!("MultipleBinarySearchTreeAllocator.rs");
+include!("RcMemorySource.rs");
 
 
 #[cfg(test)] global_thread_and_coroutine_switchable_allocator!(MyGlobalAllocator, BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>, GlobalAllocToAllocatorAdaptor(System));
