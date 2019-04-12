@@ -12,6 +12,13 @@ struct UnallocatedBlock
 impl UnallocatedBlock
 {
 	#[inline(always)]
+	fn initialize(&self, block_size: NonZeroUsize, block_initializer: &impl Fn(MemoryAddress, NonZeroUsize), slot_index: SlotIndex)
+	{
+		block_initializer((self as *const Self as *const u8).non_null(), block_size);
+		self.set_unoccupied_next_available_slot_index(slot_index)
+	}
+
+	#[inline(always)]
 	fn next_available_slot_index(&self) -> SlotIndex
 	{
 		self.next_available_slot_index.get()
