@@ -74,6 +74,13 @@ pub trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 
 	/// Add.
 	#[inline(always)]
+	fn add_non_zero(self, increment: NonZeroUsize) -> Self
+	{
+		Self::non_zero(self.to_usize() + increment.get())
+	}
+
+	/// Add.
+	#[inline(always)]
 	fn checked_add(self, increment: usize) -> Option<Self>
 	{
 		self.to_usize().checked_add(increment).map(Self::non_zero)
