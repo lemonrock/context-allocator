@@ -5,9 +5,10 @@
 use super::*;
 
 
-include!("HugePageSize.rs");
-include!("MemoryMapAllocator.rs");
+include!("alloc.rs");
+include!("global_alloc.rs");
 
 
-/// NUMA memory mapping.
-pub mod numa;
+include!("AllocatorAdaptor.rs");
+include!("AllocToAllocatorAdaptor.rs");
+include!("GlobalAllocToAllocatorAdaptor.rs");

@@ -2,19 +2,17 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// This allocator allocates memory-mapped data, optionally using NUMA policy to allocate on a memory node closest to the current thread.
+/// This NUMA-aware memory source allocates memory-mapped data, optionally using NUMA policy to allocate on a memory node closest to the current thread.
 ///
 /// It is slow and uses system calls.
 ///
-/// On non-Linux systems except for NetBSD, this allocator is extremely inefficient when reallocating.
-///
 /// On Android, DragonFlyBSD, FreeBSD, Linux and OpenBSD mappings are omitted from core dumps for data privacy.
 ///
-/// When dropped, any memory allocated with this allocator is ***NOT*** freed.
+/// When dropped, any memory obtained with this allocator is ***NOT*** freed.
 ///
-/// However, it is appropriate as a 'backing store' for other allocators.
+/// However, it is appropriate as a 'backing store' for other memory sources.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct MemoryMapAllocator
+pub struct MemoryMapSource
 {
 	map_flags: i32,
 
@@ -25,7 +23,7 @@ pub struct MemoryMapAllocator
 	#[cfg(any(target_os = "android", target_os = "linux"))] numa_settings: Option<NumaSettings>,
 }
 
-impl Default for MemoryMapAllocator
+impl Default for MemoryMapSource
 {
 	#[inline(always)]
 	fn default() -> Self
@@ -34,7 +32,7 @@ impl Default for MemoryMapAllocator
 	}
 }
 
-impl MemorySource for MemoryMapAllocator
+impl MemorySource for MemoryMapSource
 {
 	#[inline(always)]
 	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -49,41 +47,7 @@ impl MemorySource for MemoryMapAllocator
 	}
 }
 
-impl Allocator for MemoryMapAllocator
-{
-	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
-	{
-		const AssumedPageSize: usize = 4096;
-
-		if unlikely!(non_zero_power_of_two_alignment.get() > AssumedPageSize)
-		{
-			return Err(AllocErr)
-		}
-
-		self.mmap_memory(non_zero_size.get())
-	}
-
-	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
-	{
-		Self::munmap_memory(current_memory, non_zero_size.get())
-	}
-
-	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
-	{
-		self.mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
-	}
-
-	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
-	{
-		self.mremap_memory(current_memory, non_zero_current_size.get(), non_zero_new_size.get())
-	}
-}
-
-impl MemoryMapAllocator
+impl MemoryMapSource
 {
 	/// Create a new instance.
 	///
@@ -108,7 +72,7 @@ impl MemoryMapAllocator
 
 	/// `size` is rounded up to system page size.
 	#[inline(always)]
-	fn mmap_memory(&self, size: usize) -> Result<MemoryAddress, AllocErr>
+	pub(crate) fn mmap_memory(&self, size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		const UnusedFileDescriptor: i32 = -1;
 		const NoOffset: i64 = 0;
@@ -197,7 +161,7 @@ impl MemoryMapAllocator
 	/// `size` is rounded up to system page size.
 	#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
 	#[inline(always)]
-	fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	pub(crate) fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		#[cfg(target_os = "netbsd")] const MREMAP_MAYMOVE: i32 = 0;
 
@@ -214,7 +178,7 @@ impl MemoryMapAllocator
 
 	#[cfg(not(any(target_os = "android", target_os = "linux", target_os = "netbsd")))]
 	#[inline(always)]
-	fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	pub(crate) fn mremap_memory(&self, memory_address: MemoryAddress, old_size: usize, new_size: usize) -> Result<MemoryAddress, AllocErr>
 	{
 		let new_memory_address = self.mmap_memory(new_size)?;
 		unsafe { new_memory_address.as_ptr().copy_from_nonoverlapping(memory_address.as_ptr() as *const _, old_size) };
@@ -224,7 +188,7 @@ impl MemoryMapAllocator
 
 	/// `size` is rounded up to system page size.
 	#[inline(always)]
-	fn munmap_memory(memory_address: MemoryAddress, size: usize)
+	pub(crate) fn munmap_memory(memory_address: MemoryAddress, size: usize)
 	{
 		unsafe { munmap(memory_address.as_ptr() as *mut _, size) };
 	}

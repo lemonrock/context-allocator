@@ -29,13 +29,13 @@
 //! * `BitSetAllocator`, an allocator that uses a bit set of free blocks; uses 64-bit chunks to optimize searches.
 //! * `MultipleBinarySearchTreeAllocator`, an efficient allocator which minimizes fragmentation by using multiple red-black trees of free blocks which are aggresively defragmented.
 //! * `ContextAllocator`, a choice of either `BumpAllocator`, `BitSetAllocator` or `MultipleBinarySearchTreeAllocator`.
-//! * `MemoryMapAllocator`, a mmap allocator with support for NUMA policies.
-//! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs.
+//! * `MemoryMapAllocator`, a NUMA-aware mmap allocator with support for NUMA policies.
+//! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs; must b created using the macro `global_thread_and_coroutine_switchable_allocator`.
 //!
 //! Allocators use a `MemorySource` to obtain and release memory.
 //! Memory sources provided include:-
 //!
-//! * `MemoryMapAllocator`, useful for thread-local allocators as it can obtain memory from NUMA-local memory.
+//! * `MemoryMapSource`, useful for thread-local allocators as it can obtain memory from NUMA-local memory.
 //! * `ArenaMemorySource`, an arena of fixed blocks which is itself backed by a memory source; this is useful as a source for the `BumpAllocator` and `BitSetAllocator` when used for contexts.
 //!
 //! Additionally a number of adaptors are provided:-
@@ -57,12 +57,16 @@
 //! 	* Iteration over a particular free-list range may encountered blocks too small, or blocks so large they can be split up.
 //! 	* This design is similar to that used by DPDK.
 //! 	* To make the allocator multi-threaded, DPDK takes a spin lock on a particular 'heap', which is a set of free lists.
-//! * Investigate an arena allocator for fixed-size blocks (suitable for holding ready-to-rumble context allocators, say).
-//! * Investigate a fall-back over-size allocator for a thread-local allocator, which could use the `NumaMemoryMapAllocator` underneath.
+//! * Investigate a fall-back over-size allocator for a thread-local allocator, which could use the `NumaMemoryMapSource` underneath.
 //! * Investigate supporting over-size allocations in `MultipleBinarySearchTreeAllocator` by scanning the largest binary search tree for contiguous blocks.
 //! * Investigate a persistent-memory backed allocator.
 //! * Properly support excess allocations and Alloc's grow_in_place functions, but only if these are used by downstream collections.
 //! * Investigate the use of the `BMI1` intrinsics `_blsi_u64` (extract lowest set bit), `_blsmsk_u64` and `_blsr_u64`.
+//!
+//!
+//! ## Licensing
+//!
+//! The license for this project is MIT.
 
 
 extern crate either;
@@ -71,14 +75,17 @@ extern crate either;
 #[cfg(any(target_os = "android", target_os = "linux"))] extern crate syscall_alt;
 
 
-#[cfg(test)] use self::arena_memory_source::*;
+use self::adaptors::*;
+use self::allocators::*;
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::bit_set::*;
 use self::extensions::*;
 use self::global::*;
-#[cfg(test)] use self::mmap::*;
-use self::mmap::numa::*;
+use self::memory_sources::*;
+#[cfg(test)] use self::memory_sources::arena_memory_source::*;
+use self::memory_sources::mmap::*;
+use self::memory_sources::mmap::numa::*;
 use ::either::*;
 #[cfg(unix)] use ::libc::*;
 #[cfg(any(target_os = "android", target_os = "linux"))] use ::syscall_alt::syscalls::Syscall;
@@ -114,44 +121,23 @@ use ::std::ptr::null_mut;
 use ::std::rc::Rc;
 
 
-/// A memory source which uses an arena.
-pub mod arena_memory_source;
+/// Adapt various allocator traits to one another.
+pub mod adaptors;
 
 
-pub(crate) mod binary_search_trees;
-
-
-/// A bit set based allocator; allows reallocations, but requires a linear scan to find free blocks.
-pub mod bit_set;
+/// Allocators.
+pub mod allocators;
 
 
 /// Extensions useful for working with memory; not a stable part of the API of this crate.
 pub mod extensions;
 
 
-/// Global, switchable allocator.
-#[macro_use] pub mod global;
+/// Memory sources.
+pub mod memory_sources;
 
 
-/// A memory map (mmap) based allocator with support for NUMA.
-#[cfg(unix)]
-pub mod mmap;
-
-
-include!("alloc.rs");
-include!("global_alloc.rs");
-
-
-include!("Allocator.rs");
-include!("AllocatorAdaptor.rs");
-include!("AllocToAllocatorAdaptor.rs");
-include!("BumpAllocator.rs");
-include!("ContextAllocator.rs");
-include!("GlobalAllocToAllocatorAdaptor.rs");
 include!("MemoryAddress.rs");
-include!("MemorySource.rs");
-include!("MultipleBinarySearchTreeAllocator.rs");
-include!("RcMemorySource.rs");
 
 
-#[cfg(test)] global_thread_and_coroutine_switchable_allocator!(MyGlobalAllocator, BumpAllocator<ArenaMemorySource<MemoryMapAllocator>>, MultipleBinarySearchTreeAllocator<MemoryMapAllocator>, GlobalAllocToAllocatorAdaptor<System>, GlobalAllocToAllocatorAdaptor(System));
+#[cfg(test)] global_thread_and_coroutine_switchable_allocator!(MyGlobalAllocator, BumpAllocator<ArenaMemorySource<MemoryMapSource>>, MultipleBinarySearchTreeAllocator<MemoryMapSource>, GlobalAllocToAllocatorAdaptor<System>, GlobalAllocToAllocatorAdaptor(System));

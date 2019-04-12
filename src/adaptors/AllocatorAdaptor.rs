@@ -5,7 +5,7 @@
 /// Adapts an `Allocator` to the `GlobalAlloc` and `Alloc` traits.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(&'a A);
+pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(pub(crate) &'a A);
 
 impl<'a, A: 'a + Allocator> Deref for AllocatorAdaptor<'a, A>
 {

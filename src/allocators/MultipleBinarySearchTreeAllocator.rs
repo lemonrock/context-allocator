@@ -462,14 +462,14 @@ mod MultipleBinarySearchTreeAllocatorTests
 		assert_allocator_is_empty(&allocator);
 	}
 
-	fn assert_allocator_is_empty(allocator: &MultipleBinarySearchTreeAllocator<MemoryMapAllocator>)
+	fn assert_allocator_is_empty(allocator: &MultipleBinarySearchTreeAllocator<MemoryMapSource>)
 	{
 		assert_eq!(allocator.allocate(1.non_zero(), 1.non_zero()), Err(AllocErr), "Allocator was not empty");
 	}
 
-	fn new_allocator<'a>(memory_size: usize) -> MultipleBinarySearchTreeAllocator<MemoryMapAllocator>
+	fn new_allocator<'a>(memory_size: usize) -> MultipleBinarySearchTreeAllocator<MemoryMapSource>
 	{
-		let memory_source = MemoryMapAllocator::default();
+		let memory_source = MemoryMapSource::default();
 		let allocator = MultipleBinarySearchTreeAllocator::new(memory_source, memory_size.non_zero()).unwrap();
 		allocator
 	}
