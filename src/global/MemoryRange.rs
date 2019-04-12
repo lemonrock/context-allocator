@@ -6,8 +6,11 @@
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct MemoryRange
 {
-	from: MemoryAddress,
-	to: MemoryAddress,
+	/// From (inclusive).
+	pub from: MemoryAddress,
+
+	/// To (exclusive).
+	pub to: MemoryAddress,
 }
 
 impl MemoryRange
