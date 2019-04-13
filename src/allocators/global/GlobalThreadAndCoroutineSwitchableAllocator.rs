@@ -44,7 +44,7 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator: Sync + GlobalAlloc + Allo
 	fn replace_current_allocator_in_use(&self, replacement: CurrentAllocatorInUse) -> CurrentAllocatorInUse
 	{
 		let was = self.save_current_allocator_in_use();
-		self.restore_current_allocator_in_use(restore_to);
+		self.restore_current_allocator_in_use(replacement);
 		was
 	}
 
