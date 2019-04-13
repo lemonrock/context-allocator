@@ -2,8 +2,9 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
+/// Non-zero wrapper function.
 #[inline(always)]
-pub(crate) const fn non_zero_usize(value: usize) -> NonZeroUsize
+pub const fn non_zero_usize(value: usize) -> NonZeroUsize
 {
 	unsafe { NonZeroUsize::new_unchecked(value) }
 }
