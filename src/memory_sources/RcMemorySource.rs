@@ -5,8 +5,28 @@
 /// Represents a Reference-counted (RC) memory source.
 ///
 /// Useful when passing in a memory source which does not implement `Clone` to an allocator.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RcMemorySource<MS: MemorySource>(Rc<MS>);
+
+impl<MS: MemorySource> Clone for RcMemorySource<MS>
+{
+	#[inline(always)]
+	fn clone(&self) -> Self
+	{
+		Self(self.0.clone())
+	}
+}
+
+impl<MS: MemorySource> Deref for RcMemorySource<MS>
+{
+	type Target = MS;
+
+	#[inline(always)]
+	fn deref(&self) -> &Self::Target
+	{
+		&self.0
+	}
+}
 
 impl<MS: MemorySource> MemorySource for RcMemorySource<MS>
 {
@@ -20,17 +40,6 @@ impl<MS: MemorySource> MemorySource for RcMemorySource<MS>
 	fn release(&self, non_zero_size: NonZeroUsize, current_memory: MemoryAddress)
 	{
 		self.0.release(non_zero_size, current_memory)
-	}
-}
-
-impl<MS: MemorySource> Deref for RcMemorySource<MS>
-{
-	type Target = MS;
-
-	#[inline(always)]
-	fn deref(&self) -> &Self::Target
-	{
-		&self.0
 	}
 }
 
