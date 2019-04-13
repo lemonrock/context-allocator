@@ -39,6 +39,15 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator: Sync + GlobalAlloc + Allo
 	/// Restore the current allocator in use.
 	fn restore_current_allocator_in_use(&self, restore_to: CurrentAllocatorInUse);
 
+	/// Replace the current allocator in use.
+	#[inline(always)]
+	fn replace_current_allocator_in_use(&self, replacement: CurrentAllocatorInUse) -> CurrentAllocatorInUse
+	{
+		let was = self.save_current_allocator_in_use();
+		self.restore_current_allocator_in_use(restore_to);
+		was
+	}
+
 	/// Switch the current allocator in use to coroutine local and execute the callback; restore it after calling the callback unless a panic occurs.
 	#[inline(always)]
 	fn callback_with_coroutine_local_allocator<R>(&self, callback: impl FnOnce() -> R) -> R
