@@ -6,27 +6,27 @@
 pub trait Allocator: Debug + Sized
 {
 	/// The sentinel value used for a zero-sized allocation.
-	const ZeroSizedAllocation: MemoryAddress = non_null_pointer(::std::usize::MAX as *mut u8);
+	const ZeroSizedAllocation: NonNull<u8> = non_null_pointer(::std::usize::MAX as *mut u8);
 
 	/// Allocate memory.
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>;
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>;
 
 	/// Deallocate (free) memory.
 	///
 	/// The parameter `memory` will never be the value `Self::ZeroSizedAllocation` and will always have been allocated by this `Allocator`.
-	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress);
+	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>);
 
 	/// Reallocate memory by growing it.
 	///
 	/// `non_zero_new_size` will always be greater than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>;
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>;
 
 	/// Reallocate memory by shrinking it.
 	///
 	/// `non_zero_new_size` will always be less than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>;
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>;
 
 	/// Adapts to a `GlobalAlloc` and `Alloc`.
 	#[inline(always)]
@@ -44,7 +44,7 @@ pub trait Allocator: Debug + Sized
 
 	#[doc(hidden)]
 	#[inline(always)]
-	fn allocate_zeroed(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	fn allocate_zeroed(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 
@@ -52,27 +52,19 @@ pub trait Allocator: Debug + Sized
 
 		if unlikely!(zero_size == 0)
 		{
-			return Ok(Self::ZeroSizedAllocation)
+			return Ok((Self::ZeroSizedAllocation, 0))
 		}
 
 		let non_zero_size = layout.size_.non_zero();
-		let result = self.allocate(non_zero_size, layout.align_);
+		let (memory_address, actual_size) = self.allocate(non_zero_size, layout.align_)?;
 
-		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
-		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
-		let pointer = unsafe { transmute::<_, *mut u8>(result) };
-
-		if likely!(!pointer.is_null())
-		{
-			unsafe { pointer.write_bytes(0x00, zero_size) };
-		}
-
-		unsafe { transmute(pointer) }
+		unsafe { memory_address.as_ptr().write_bytes(0x00, actual_size) };
+		Ok((memory_address, actual_size))
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	fn reallocate(&self, current_memory: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	fn reallocate(&self, current_memory: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 
@@ -80,7 +72,7 @@ pub trait Allocator: Debug + Sized
 
 		if unlikely!(current_size == new_size)
 		{
-			return Ok(current_memory)
+			return Ok((current_memory, new_size))
 		}
 
 		let non_zero_power_of_two_alignment = layout.align_;
@@ -104,7 +96,7 @@ pub trait Allocator: Debug + Sized
 			if unlikely!(new_size == 0)
 			{
 				self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
-				return Ok(Self::ZeroSizedAllocation)
+				return Ok((Self::ZeroSizedAllocation, new_size))
 			}
 
 			let non_zero_new_size = new_size.non_zero();
@@ -126,14 +118,22 @@ pub trait Allocator: Debug + Sized
 		}
 
 		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
-		transmute(self.allocate(non_zero_size, layout.align_))
+		match self.allocate(non_zero_size, layout.align_)
+		{
+			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
+			Err(_) => null_mut(),
+		}
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
 	unsafe fn GlobalAlloc_alloc_zeroed(&self, layout: Layout) -> *mut u8
 	{
-		transmute(self.allocate_zeroed(layout))
+		match self.allocate_zeroed(layout)
+		{
+			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
+			Err(_) => null_mut(),
+		}
 	}
 
 	#[doc(hidden)]
@@ -164,32 +164,36 @@ pub trait Allocator: Debug + Sized
 	{
 		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
 
-		transmute(self.reallocate(NonNull::new_unchecked(ptr), layout, new_size))
+		match self.reallocate(NonNull::new_unchecked(ptr), layout, new_size)
+		{
+			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
+			Err(_) => null_mut(),
+		}
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_alloc(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	fn AllocRef_alloc(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		if unlikely!(layout.size_ == 0)
 		{
-			return Ok(Self::ZeroSizedAllocation)
+			return Ok((Self::ZeroSizedAllocation, 0))
 		}
-		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
+		let non_zero_size = unsafe { NonZeroUsize::new_unchecked(layout.size_) };
 		self.allocate(non_zero_size, layout.align_)
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_alloc_zeroed(&self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+	fn AllocRef_alloc_zeroed(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		self.allocate_zeroed(layout)
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_dealloc(&self, ptr: MemoryAddress, layout: Layout)
+	unsafe fn AllocRef_dealloc(&self, ptr: NonNull<u8>, layout: Layout)
 	{
 		if unlikely!(ptr == Self::ZeroSizedAllocation)
 		{
@@ -205,60 +209,29 @@ pub trait Allocator: Debug + Sized
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_realloc(&self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
+	unsafe fn AllocRef_realloc(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		self.reallocate(ptr, layout, new_size)
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_alloc_excess(&self, layout: Layout) -> Result<Excess, AllocErr>
+	unsafe fn AllocRef_realloc_zeroed(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
+		let (memory_address, actual_size) = self.reallocate(ptr, layout, new_size)?;
+
 		let layout = LayoutHack::access_private_fields(layout);
-		if unlikely!(layout.size_ == 0)
+		let old_size = layout.size_;
+		if actual_size > old_size
 		{
-			return Ok(Excess(Self::ZeroSizedAllocation, 0))
+			memory_address.as_ptr().add(old_size).write_bytes(0x00, actual_size - old_size);
 		}
-		let size = layout.size_;
-		let non_zero_size = NonZeroUsize::new_unchecked(size);
-
-		let result = self.allocate(non_zero_size, layout.align_);
-
-		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
-		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
-		let pointer: *mut u8 = transmute(result);
-		if unlikely!(pointer.is_null())
-		{
-			Err(AllocErr)
-		}
-		else
-		{
-			Ok(Excess(NonNull::new_unchecked(pointer), size))
-		}
+		Ok((memory_address, actual_size))
 	}
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_realloc_excess(&self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
-	{
-		let result = self.reallocate(ptr, layout, new_size);
-
-		// NOTE: AllocErr does not implement `Copy`, but is zero-sized - seems like a Rust API oversight.
-		// Hence the logic transmuting it to a pointer (for an efficient null check), then back to a result.
-		let pointer: *mut u8 = transmute(result);
-		if unlikely!(pointer.is_null())
-		{
-			Err(AllocErr)
-		}
-		else
-		{
-			Ok(Excess(NonNull::new_unchecked(pointer), new_size))
-		}
-	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn Alloc_grow_in_place(&self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn AllocRef_grow_in_place(&self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		let size_ = layout.size_;
@@ -268,7 +241,22 @@ pub trait Allocator: Debug + Sized
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn Alloc_shrink_in_place(&self, _ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+	unsafe fn AllocRef_grow_in_place_zeroed(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
+	{
+		let actual_size = self.AllocRef_grow_in_place(ptr, layout, new_size)?;
+
+		let layout = LayoutHack::access_private_fields(layout);
+		let old_size = layout.size_;
+		if actual_size > old_size
+		{
+			ptr.as_ptr().add(old_size).write_bytes(0x00, actual_size - old_size);
+		}
+		Ok(actual_size)
+	}
+
+	#[doc(hidden)]
+	#[inline(always)]
+	unsafe fn AllocRef_shrink_in_place(&self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
 	{
 		let layout = LayoutHack::access_private_fields(layout);
 		let size_ = layout.size_;

@@ -3,8 +3,8 @@
 
 
 /// Adapts an `Allocator` to the `GlobalAlloc` and `Alloc` traits.
-#[repr(transparent)]
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(pub(crate) &'a A);
 
 impl<'a, A: 'a + Allocator> Deref for AllocatorAdaptor<'a, A>
@@ -23,7 +23,7 @@ unsafe impl<'a, A: 'a + Allocator> GlobalAlloc for AllocatorAdaptor<'a, A>
 	global_alloc!();
 }
 
-unsafe impl<'a, A: 'a + Allocator> Alloc for AllocatorAdaptor<'a, A>
+unsafe impl<'a, A: 'a + Allocator> AllocRef for AllocatorAdaptor<'a, A>
 {
 	alloc!();
 }
@@ -31,25 +31,25 @@ unsafe impl<'a, A: 'a + Allocator> Alloc for AllocatorAdaptor<'a, A>
 impl<'a, A: 'a + Allocator> Allocator for AllocatorAdaptor<'a, A>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		self.0.allocate(non_zero_size, non_zero_power_of_two_alignment)
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		self.0.deallocate(non_zero_size, non_zero_power_of_two_alignment, current_memory)
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		self.0.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		self.0.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
 	}

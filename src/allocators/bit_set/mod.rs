@@ -3,6 +3,7 @@
 
 
 use super::*;
+use crate::allocators::global::{LocalAllocator, MemoryRange};
 
 
 include!("AbsoluteLocationInBitSet.rs");

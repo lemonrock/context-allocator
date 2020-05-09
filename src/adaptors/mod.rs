@@ -10,5 +10,5 @@ include!("global_alloc.rs");
 
 
 include!("AllocatorAdaptor.rs");
-include!("AllocToAllocatorAdaptor.rs");
+include!("AllocRefToAllocatorAdaptor.rs");
 include!("GlobalAllocToAllocatorAdaptor.rs");

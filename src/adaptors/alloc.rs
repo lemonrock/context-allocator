@@ -9,51 +9,51 @@ macro_rules! alloc
 	() =>
 	{
 		#[inline(always)]
-		unsafe fn alloc(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+		fn alloc(&mut self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 		{
-			self.Alloc_alloc(layout)
+			self.AllocRef_alloc(layout)
 		}
 
 		#[inline(always)]
-		unsafe fn alloc_zeroed(&mut self, layout: Layout) -> Result<MemoryAddress, AllocErr>
+		fn alloc_zeroed(&mut self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 		{
-			self.Alloc_alloc_zeroed(layout)
+			self.AllocRef_alloc_zeroed(layout)
 		}
 
 		#[inline(always)]
-		unsafe fn dealloc(&mut self, ptr: MemoryAddress, layout: Layout)
+		unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout)
 		{
-			self.Alloc_dealloc(ptr, layout)
+			self.AllocRef_dealloc(ptr, layout)
 		}
 
 		#[inline(always)]
-		unsafe fn realloc(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<MemoryAddress, AllocErr>
+		unsafe fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 		{
-			self.Alloc_realloc(ptr, layout, new_size)
+			self.AllocRef_realloc(ptr, layout, new_size)
 		}
 
 		#[inline(always)]
-		unsafe fn alloc_excess(&mut self, layout: Layout) -> Result<Excess, AllocErr>
+		unsafe fn realloc_zeroed(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 		{
-			self.Alloc_alloc_excess(layout)
+			self.AllocRef_realloc_zeroed(ptr, layout, new_size)
 		}
 
 		#[inline(always)]
-		unsafe fn realloc_excess(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<Excess, AllocErr>
+		unsafe fn grow_in_place(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
 		{
-			self.Alloc_realloc_excess(ptr, layout, new_size)
+			self.AllocRef_grow_in_place(ptr, layout, new_size)
 		}
 
 		#[inline(always)]
-		unsafe fn grow_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+		unsafe fn grow_in_place_zeroed(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
 		{
-			self.Alloc_grow_in_place(ptr, layout, new_size)
+			self.AllocRef_grow_in_place_zeroed(ptr, layout, new_size)
 		}
 
 		#[inline(always)]
-		unsafe fn shrink_in_place(&mut self, ptr: MemoryAddress, layout: Layout, new_size: usize) -> Result<(), CannotReallocInPlace>
+		unsafe fn shrink_in_place(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
 		{
-			self.Alloc_shrink_in_place(ptr, layout, new_size)
+			self.AllocRef_shrink_in_place(ptr, layout, new_size)
 		}
 	}
 }

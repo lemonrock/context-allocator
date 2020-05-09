@@ -45,11 +45,11 @@ impl<MS: MemorySource> Debug for MultipleBinarySearchTreeAllocator<MS>
 impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		macro_rules! try_to_allocate_exact_size_block
 		{
-			($node_pointer: ident, $is_cached_first_child: expr, $non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $_block_size: ident, $_exact_block_size: ident, $_self: ident) =>
+			($node_pointer: ident, $is_cached_first_child: expr, $non_zero_power_of_two_alignment: ident, $binary_search_tree: ident, $block_size: ident, $_exact_block_size: ident, $_self: ident) =>
 			{
 				{
 					let memory_address = $node_pointer.value();
@@ -58,7 +58,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 					{
 						$binary_search_tree.remove($node_pointer, $is_cached_first_child);
 
-						return Ok(memory_address)
+						return Ok((memory_address, $block_size.get()))
 					}
 				}
 			}
@@ -84,7 +84,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 							// Blocks(s) at end.
 							$self.split_up_block(memory_address.add($exact_block_size), end_memory_address);
 
-							return Ok(memory_address)
+							return Ok((memory_address, $block_size))
 						}
 
 						memory_address.add_assign_non_zero($floored_non_zero_power_of_two_alignment);
@@ -129,9 +129,10 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 		}
 
 		// (1) Try to satisfy allocation from a binary search tree of blocks of the same size.
-		let binary_search_tree_index_for_blocks_of_exact_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(Self::block_size(non_zero_size));
+		let exact_block_size = Self::block_size(non_zero_size);
+		let binary_search_tree_index_for_blocks_of_exact_size = BinarySearchTreesWithCachedKnowledgeOfFirstChild::binary_search_tree_index(exact_block_size);
 		#[allow(dead_code)] const Unused: () = ();
-		try_to_satisfy_allocation!(try_to_allocate_exact_size_block, binary_search_tree_index_for_blocks_of_exact_size, non_zero_power_of_two_alignment, Unused, Unused, Unused);
+		try_to_satisfy_allocation!(try_to_allocate_exact_size_block, binary_search_tree_index_for_blocks_of_exact_size, non_zero_power_of_two_alignment, exact_block_size, Unused, Unused);
 
 		// (2) Try to satisfy allocation from binary search trees of blocks of larger size (either because of exhaustion or a large alignment).
 		let floored_non_zero_power_of_two_alignment = BinarySearchTreesWithCachedKnowledgeOfFirstChild::floor_alignment_to_minimum(non_zero_power_of_two_alignment);
@@ -147,7 +148,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		let block_size = Self::block_size(non_zero_size);
 
@@ -164,7 +165,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<NonNull<u8>, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		debug_assert!(non_zero_new_size > non_zero_current_size, "non_zero_new_size `{}` should be greater than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
@@ -174,7 +175,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 		// (1) Satisfy from within existing block.
 		if new_block_size == old_block_size
 		{
-			return Ok(current_memory)
+			return Ok((current_memory, new_block_size.get()))
 		}
 
 		// (2) For a simple doubling, it can be more efficient to try to coalesce two blocks.
@@ -189,19 +190,19 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 				let is_first_child = contiguous_block_node_pointer == binary_search_tree.cached_first_child();
 				binary_search_tree.remove(contiguous_block_node_pointer, is_first_child);
 
-				return Ok(current_memory)
+				return Ok((current_memory, new_block_size.get()))
 			}
 		}
 
 		// (3) Allocate a new block and copy over data.
-		let block_to_copy_into = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
+		let (block_to_copy_into, new_block_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
 		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), non_zero_current_size.get()) };
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
-		Ok(block_to_copy_into)
+		Ok((block_to_copy_into, new_block_size))
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<NonNull<u8>, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		debug_assert!(non_zero_new_size < non_zero_current_size, "non_zero_new_size `{}` should be less than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
@@ -210,7 +211,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 
 		self.split_up_block(current_memory.add_non_zero(new_block_size), current_memory.add_non_zero(old_block_size));
 
-		Ok(current_memory)
+		Ok((current_memory, new_block_size.get()))
 	}
 }
 
@@ -365,6 +366,8 @@ impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 mod MultipleBinarySearchTreeAllocatorTests
 {
 	use super::*;
+	use crate::allocators::binary_search_trees::BinarySearchTreesWithCachedKnowledgeOfFirstChild;
+	use crate::memory_sources::mmap::MemoryMapSource;
 
 	#[test]
 	pub fn repeated_small_allocations()
@@ -398,7 +401,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 
 		let allocator = new_allocator(256);
 
-		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let (allocation, _) = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocation.write(MemoryPattern);
 
 		let reallocation = allocator.shrinking_reallocate(16.non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
@@ -411,7 +414,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 	{
 		let allocator = new_allocator(64);
 
-		let original_allocation = allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let (original_allocation, _) = allocator.allocate(64.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		assert_allocator_is_empty(&allocator);
 
 		let reallocation = allocator.shrinking_reallocate(32.non_zero(), 8.non_zero(), 64.non_zero(), original_allocation).expect(&format!("Did not reallocate"));
@@ -429,7 +432,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 
 		let allocator = new_allocator(64);
 
-		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let (allocation, _) = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		allocation.write(MemoryPattern);
 
 		let reallocation = allocator.growing_reallocate((AllocationSize + 1).non_zero(), 8.non_zero(), AllocationSize.non_zero(), allocation).expect(&format!("Did not reallocate"));
@@ -443,7 +446,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 		const AllocationSize: usize = 31;
 
 		let allocator = new_allocator(32);
-		let allocation = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
+		let (allocation, _) = allocator.allocate(AllocationSize.non_zero(), 8.non_zero()).expect(&format!("Did not allocate"));
 		assert_allocator_is_empty(&allocator);
 
 		allocator.deallocate(AllocationSize.non_zero(), 8.non_zero(), allocation);

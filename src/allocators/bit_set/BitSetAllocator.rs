@@ -31,7 +31,7 @@ impl<MS: MemorySource> Drop for BitSetAllocator<MS>
 impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let number_of_bits_required = self.number_of_bits_required(non_zero_size);
 
@@ -56,7 +56,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		#[inline(always)]
 		fn unset_unaligned_trailing_bits_at_front(location: AbsoluteLocationInBitSet, number_of_bits_required: NumberOfBits) -> (BitSetWordPointer, NumberOfBits)
@@ -111,7 +111,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
 		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
@@ -122,7 +122,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 		let reallocate_size = new_memory_offset_in_bytes - current_memory_offset_in_bytes;
 		if unlikely!(reallocate_size.is_zero())
 		{
-			return Ok(current_memory)
+			return Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
 		}
 
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
@@ -131,7 +131,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 			let location = self.absolute_location_in_bit_set(current_memory);
 			location.major
 		});
-		let allocated = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
+		let (allocated, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
 
 		if likely!(allocated != current_memory)
 		{
@@ -142,11 +142,11 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 			}
 			memmove(current_memory, allocated, non_zero_current_size)
 		}
-		Ok(allocated)
+		Ok((allocated, actual_size))
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
 		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
@@ -160,7 +160,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 			let end_of_new_memory = current_memory.add(new_memory_offset_in_bytes.to_usize());
 			self.deallocate(deallocate_size.to_non_zero(), non_zero_power_of_two_alignment, end_of_new_memory)
 		}
-		Ok(current_memory)
+		Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
 	}
 }
 
@@ -261,7 +261,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn try_to_set_number_of_bits(&self, number_of_bits_required: NumberOfBits, power_of_two_exponent: usize) -> Result<MemoryAddress, AllocErr>
+	fn try_to_set_number_of_bits(&self, number_of_bits_required: NumberOfBits, power_of_two_exponent: usize) -> Result<(MemoryAddress, usize), AllocErr>
 	{
 		debug_assert!(number_of_bits_required.is_not_zero());
 
@@ -317,7 +317,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn allocate_in_contiguous_unset_bits(&self, bits_to_set_at_front_and_in_middle: NumberOfBits, bit_set_word_pointer: BitSetWordPointer, number_of_bits_required: NumberOfBits) -> MemoryAddress
+	fn allocate_in_contiguous_unset_bits(&self, bits_to_set_at_front_and_in_middle: NumberOfBits, bit_set_word_pointer: BitSetWordPointer, number_of_bits_required: NumberOfBits) -> (MemoryAddress, usize)
 	{
 		#[inline(always)]
 		fn set_unaligned_trailing_bits_in_front(bits_to_set_at_front_and_in_middle: NumberOfBits, bit_set_word_pointer: BitSetWordPointer, inclusive_start_of_bit_set: BitSetWordPointer) -> (BitSetWordPointer, NumberOfBits, NumberOfBits)
@@ -369,11 +369,11 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 		let bits_to_set_at_end = number_of_bits_required - bits_to_set_at_front_and_in_middle;
 		set_unaligned_leading_bits_in_end(location_major, bits_to_set_at_end);
 
-		self.successful_allocation(bit_set_word_pointer, offset_into_bit_set)
+		self.successful_allocation(bit_set_word_pointer, offset_into_bit_set, number_of_bits_required)
 	}
 
 	#[inline(always)]
-	fn number_of_blocks_is_less_than_64(&self, number_of_bits_required: NumberOfBits, bit_set_word_pointer: BitSetWordPointer, current: BitSetWord, current_leading_unset_bits: NumberOfBits, _contiguous_unset_bits_now_available: NumberOfBits, power_of_two_exponent: usize) -> Either<MemoryAddress, NumberOfBits>
+	fn number_of_blocks_is_less_than_64(&self, number_of_bits_required: NumberOfBits, bit_set_word_pointer: BitSetWordPointer, current: BitSetWord, current_leading_unset_bits: NumberOfBits, _contiguous_unset_bits_now_available: NumberOfBits, power_of_two_exponent: usize) -> Either<(MemoryAddress, usize), NumberOfBits>
 	{
 		debug_assert!(current_leading_unset_bits < NumberOfBits::InBitSetWord, "If there are 64 leading unset bits, and this allocation is for less than 64 blocks, then it should have been allocated successfully prior to this method");
 		debug_assert!(number_of_bits_required > current_leading_unset_bits);
@@ -433,7 +433,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 						major_location + minor_location
 					};
 
-					Left(self.successful_allocation(bit_set_word_pointer, offset_into_bit_set))
+					Left(self.successful_allocation(bit_set_word_pointer, offset_into_bit_set, number_of_bits_required))
 				}
 			}
 
@@ -446,7 +446,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn number_of_blocks_is_64_or_more(&self, _number_of_bits_required: NumberOfBits, _bit_set_word_pointer: BitSetWordPointer, current: BitSetWord, current_leading_unset_bits: NumberOfBits, contiguous_unset_bits_now_available: NumberOfBits, power_of_two_exponent: usize) -> Either<MemoryAddress, NumberOfBits>
+	fn number_of_blocks_is_64_or_more(&self, _number_of_bits_required: NumberOfBits, _bit_set_word_pointer: BitSetWordPointer, current: BitSetWord, current_leading_unset_bits: NumberOfBits, contiguous_unset_bits_now_available: NumberOfBits, power_of_two_exponent: usize) -> Either<(MemoryAddress, usize), NumberOfBits>
 	{
 		if likely!(current_leading_unset_bits.is_one_bit_set_word())
 		{
@@ -459,10 +459,12 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn successful_allocation(&self, bit_set_word_pointer: BitSetWordPointer, offset_into_bit_set: NumberOfBits) -> MemoryAddress
+	fn successful_allocation(&self, bit_set_word_pointer: BitSetWordPointer, offset_into_bit_set: NumberOfBits, number_of_bits_required: NumberOfBits) -> (MemoryAddress, usize)
 	{
 		self.start_search_for_next_allocation_at.set(bit_set_word_pointer);
-		self.allocations_start_from.add(offset_into_bit_set.scale_to_memory_offset_in_bytes(&self.block_size).to_usize())
+		let memory_address = self.allocations_start_from.add(offset_into_bit_set.scale_to_memory_offset_in_bytes(&self.block_size).to_usize());
+		let actual_size = number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size).to_usize();
+		(memory_address, actual_size)
 	}
 
 	#[inline(always)]

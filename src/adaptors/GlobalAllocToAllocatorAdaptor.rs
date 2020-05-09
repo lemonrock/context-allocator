@@ -27,27 +27,30 @@ impl<GA: GlobalAlloc> Deref for GlobalAllocToAllocatorAdaptor<GA>
 impl<GA: GlobalAlloc> Allocator for GlobalAllocToAllocatorAdaptor<GA>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		unsafe { transmute(self.0.alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment))) }
+		let pointer = unsafe { self.0.alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment)) };
+		Self::adapt_pointer(pointer, non_zero_size)
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		unsafe { self.0.dealloc(current_memory.as_ptr(), Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		unsafe { transmute(self.0.realloc(current_memory.as_ptr(), Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get())) }
+		let pointer = unsafe { self.0.realloc(current_memory.as_ptr(), Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get()) };
+		Self::adapt_pointer(pointer, non_zero_new_size)
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		unsafe { transmute(self.0.realloc(current_memory.as_ptr(), Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get())) }
+		let pointer = unsafe { self.0.realloc(current_memory.as_ptr(), Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get()) };
+		Self::adapt_pointer(pointer, non_zero_new_size)
 	}
 }
 
@@ -57,5 +60,18 @@ impl<GA: GlobalAlloc> GlobalAllocToAllocatorAdaptor<GA>
 	fn layout(non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Layout
 	{
 		unsafe { Layout::from_size_align_unchecked(non_zero_size.get(), non_zero_power_of_two_alignment.get()) }
+	}
+
+	#[inline(always)]
+	fn adapt_pointer(pointer: *mut u8, non_zero_new_size: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
+	{
+		if unlikely!(pointer.is_null())
+		{
+			Err(AllocErr)
+		}
+		else
+		{
+			Ok((unsafe { NonNull::new_unchecked(pointer) }, non_zero_new_size.get()))
+		}
 	}
 }

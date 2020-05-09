@@ -7,7 +7,9 @@
 pub struct PerThreadState<CoroutineLocalAllocator: LocalAllocator, ThreadLocalAllocator: LocalAllocator>
 {
 	pub current_allocator_in_use: CurrentAllocatorInUse,
+
 	pub coroutine_local_allocator: Option<CoroutineLocalAllocator>,
+
 	pub thread_local_allocator: Option<ThreadLocalAllocator>,
 }
 

@@ -2,10 +2,10 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// Adapts implementations of `Alloc` to `Allocator`.
-pub struct AllocToAllocatorAdaptor<A: Alloc>(UnsafeCell<A>);
+/// Adapts implementations of `AllocRef` to `Allocator`.
+pub struct AllocRefToAllocatorAdaptor<A: AllocRef>(UnsafeCell<A>);
 
-impl<A: Alloc> Debug for AllocToAllocatorAdaptor<A>
+impl<A: AllocRef> Debug for AllocRefToAllocatorAdaptor<A>
 {
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result
 	{
@@ -13,7 +13,7 @@ impl<A: Alloc> Debug for AllocToAllocatorAdaptor<A>
 	}
 }
 
-impl<A: Alloc> Deref for AllocToAllocatorAdaptor<A>
+impl<A: AllocRef> Deref for AllocRefToAllocatorAdaptor<A>
 {
 	type Target = A;
 
@@ -24,34 +24,34 @@ impl<A: Alloc> Deref for AllocToAllocatorAdaptor<A>
 	}
 }
 
-impl<A: Alloc> Allocator for AllocToAllocatorAdaptor<A>
+impl<A: AllocRef> Allocator for AllocRefToAllocatorAdaptor<A>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		unsafe { self.mutable_reference().alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
+		self.mutable_reference().alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment))
 	}
 
 	#[inline(always)]
-	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: MemoryAddress)
+	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
 		unsafe { self.mutable_reference().dealloc(current_memory, Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		unsafe { self.mutable_reference().realloc(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get()) }
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: MemoryAddress) -> Result<MemoryAddress, AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		unsafe { self.mutable_reference().realloc(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get()) }
 	}
 }
 
-impl<A: Alloc> AllocToAllocatorAdaptor<A>
+impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 {
 	#[inline(always)]
 	fn mutable_reference(&self) -> &mut A

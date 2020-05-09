@@ -9,7 +9,7 @@
 /// When dropped, any memory obtained with this allocator is ***NOT*** freed.
 ///
 /// However, it is appropriate as a 'backing store' for other memory sources.
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MemoryMapSource
 {
 	/// Mapped memory settings.
