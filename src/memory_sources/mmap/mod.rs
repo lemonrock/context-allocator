@@ -3,11 +3,12 @@
 
 
 use super::*;
+use errno::errno;
+use linux_support::memory::huge_pages::DefaultPageSizeAndHugePageSizes;
+use linux_support::memory::mapping::MemoryMapError;
+use linux_support::memory::mapping::MappedMemorySettings;
+use std::mem::forget;
+use std::num::NonZeroU64;
 
 
-include!("HugePageSize.rs");
 include!("MemoryMapSource.rs");
-
-
-/// NUMA memory mapping.
-pub mod numa;

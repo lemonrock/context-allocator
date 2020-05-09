@@ -30,7 +30,7 @@
 //! * `MultipleBinarySearchTreeAllocator`, an efficient allocator which minimizes fragmentation by using multiple red-black trees of free blocks which are aggresively defragmented.
 //! * `ContextAllocator`, a choice of either `BumpAllocator`, `BitSetAllocator` or `MultipleBinarySearchTreeAllocator`.
 //! * `MemoryMapAllocator`, a NUMA-aware mmap allocator with support for NUMA policies.
-//! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs; must b created using the macro `global_thread_and_coroutine_switchable_allocator`.
+//! * `GlobalThreadAndCoroutineSwitchableAllocator`, suitable for replacing the global allocator and provides switchable allocators for global, thread local and context (coroutine) local needs; must be created using the macro `global_thread_and_coroutine_switchable_allocator`.
 //!
 //! Allocators use a `MemorySource` to obtain and release memory.
 //! Memory sources provided include:-
@@ -51,7 +51,6 @@
 //! ## Future
 //!
 //! * Investigate wrapping [Rampant Pixel's Memory Allocator](https://github.com/rampantpixels/rpmalloc).
-//! * Investigate using DPDK's allocator.
 //! * Investigate a B-tree backed allocator.
 //! * Investigate a design that uses multiple doubly-linked 'free' lists of blocks; blocks can be variable in size but the free list is sorted
 //! 	* Iteration over a particular free-list range may encountered blocks too small, or blocks so large they can be split up.
@@ -82,9 +81,6 @@ use self::bit_set::*;
 use self::extensions::*;
 use self::global::*;
 use self::memory_sources::*;
-use self::memory_sources::arena_memory_source::*;
-use self::memory_sources::mmap::*;
-use self::memory_sources::mmap::numa::*;
 use either::*;
 use libc::*;
 use likely::*;
