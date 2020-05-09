@@ -69,10 +69,9 @@
 //! The license for this project is MIT.
 
 
-extern crate either;
-#[macro_use] extern crate likely;
-#[cfg(unix)] extern crate libc;
-#[cfg(any(target_os = "android", target_os = "linux"))] extern crate syscall_alt;
+use static_assertions::assert_cfg;
+assert_cfg!(target_os = "linux");
+assert_cfg!(target_pointer_width = "64");
 
 
 use self::adaptors::*;
@@ -83,42 +82,42 @@ use self::bit_set::*;
 use self::extensions::*;
 use self::global::*;
 use self::memory_sources::*;
-#[cfg(test)] use self::memory_sources::arena_memory_source::*;
+use self::memory_sources::arena_memory_source::*;
 use self::memory_sources::mmap::*;
 use self::memory_sources::mmap::numa::*;
-use ::either::*;
-#[cfg(unix)] use ::libc::*;
-#[cfg(any(target_os = "android", target_os = "linux"))] use ::syscall_alt::syscalls::Syscall;
-use ::std::alloc::CannotReallocInPlace;
-use ::std::alloc::Layout;
-use ::std::alloc::GlobalAlloc;
-use ::std::alloc::Alloc;
-use ::std::alloc::AllocErr;
-use ::std::alloc::Excess;
+use either::*;
+use libc::*;
+use likely::*;
+use std::alloc::CannotReallocInPlace;
+use std::alloc::Layout;
+use std::alloc::GlobalAlloc;
+use std::alloc::Alloc;
+use std::alloc::AllocErr;
+use std::alloc::Excess;
 #[cfg(test)] use ::std::alloc::System;
-use ::std::collections::Bound;
-use ::std::collections::Bound::*;
-use ::std::cell::Cell;
-use ::std::cell::UnsafeCell;
-use ::std::cmp::max;
-use ::std::cmp::Ordering;
-use ::std::fmt;
-use ::std::fmt::Debug;
-use ::std::fmt::Formatter;
-use ::std::mem::align_of;
-use ::std::mem::size_of;
-use ::std::mem::transmute;
-use ::std::num::NonZeroU32;
-use ::std::num::NonZeroUsize;
-use ::std::ops::Add;
-use ::std::ops::Deref;
-use ::std::ops::Shr;
-use ::std::ops::Sub;
-use ::std::ops::SubAssign;
-use ::std::ptr::NonNull;
-use ::std::ptr::null;
-use ::std::ptr::null_mut;
-use ::std::rc::Rc;
+use std::collections::Bound;
+use std::collections::Bound::*;
+use std::cell::Cell;
+use std::cell::UnsafeCell;
+use std::cmp::max;
+use std::cmp::Ordering;
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::mem::align_of;
+use std::mem::size_of;
+use std::mem::transmute;
+use std::num::NonZeroU32;
+use std::num::NonZeroUsize;
+use std::ops::Add;
+use std::ops::Deref;
+use std::ops::Shr;
+use std::ops::Sub;
+use std::ops::SubAssign;
+use std::ptr::NonNull;
+use std::ptr::null;
+use std::ptr::null_mut;
+use std::rc::Rc;
 
 
 /// Adapt various allocator traits to one another.
