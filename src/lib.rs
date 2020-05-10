@@ -19,7 +19,7 @@
 //! 
 //! This provides allocators suitable for a number of use cases.
 //!
-//! All of these allocators implement the traits `::std::alloc::GlobalAlloc` and `::std::alloc::Alloc`, as we as a common base trait, `Allocator`.
+//! All of these allocators implement the traits `std::alloc::GlobalAlloc` and `std::alloc::Alloc`, as we as a common base trait, `Allocator`.
 //!
 //! The most useful is a global allocator which allows switching between thread, coroutine and global (and thuse lockable) memory allocators, using the macro `global_thread_and_coroutine_switchable_allocator()`.
 //!
@@ -89,7 +89,7 @@ use std::alloc::Layout;
 use std::alloc::GlobalAlloc;
 use std::alloc::AllocRef;
 use std::alloc::AllocErr;
-#[cfg(test)] use ::std::alloc::System;
+#[cfg(test)] use std::alloc::System;
 use std::collections::Bound;
 use std::collections::Bound::*;
 use std::cell::Cell;

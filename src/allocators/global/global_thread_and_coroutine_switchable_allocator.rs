@@ -42,7 +42,7 @@ macro_rules! global_thread_and_coroutine_switchable_allocator
 		pub(crate) mod $mod_name
 		{
 			use $crate::*;
-			use ::std::mem::replace;
+			use std::mem::replace;
 
 			/// Effectively this is a field of `GlobalThreadAndCoroutineSwitchableAllocatorInstance` with a different value for each thread.
 			///

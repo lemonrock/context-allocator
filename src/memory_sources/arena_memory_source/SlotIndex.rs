@@ -7,7 +7,7 @@ struct SlotIndex(usize);
 
 impl SlotIndex
 {
-	const IsFullyAllocatedNextAvailableSlotIndexSentinel: Self = Self(::std::usize::MAX);
+	const IsFullyAllocatedNextAvailableSlotIndexSentinel: Self = Self(usize::MAX);
 
 	#[inline(always)]
 	fn is_fully_allocated(self) -> bool

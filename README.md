@@ -2,7 +2,7 @@
 
 This provides allocators suitable for a number of use cases.
 
-All of these allocators implement the traits `::std::alloc::GlobalAlloc` and `::std::alloc::Alloc`, as we as a common base trait, `Allocator`.
+All of these allocators implement the traits `std::alloc::GlobalAlloc` and `std::alloc::AllocRef`, as we as a common base trait, `Allocator`.
 
 The most useful is a global allocator which allows switching between thread, coroutine and global (and thuse lockable) memory allocators, using the macro `global_thread_and_coroutine_switchable_allocator()`.
 

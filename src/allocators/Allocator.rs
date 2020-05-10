@@ -6,7 +6,7 @@
 pub trait Allocator: Debug + Sized
 {
 	/// The sentinel value used for a zero-sized allocation.
-	const ZeroSizedAllocation: NonNull<u8> = non_null_pointer(::std::usize::MAX as *mut u8);
+	const ZeroSizedAllocation: NonNull<u8> = non_null_pointer(usize::MAX as *mut u8);
 
 	/// Allocate memory.
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>;

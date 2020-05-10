@@ -135,7 +135,7 @@ pub trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	fn to_non_zero_u32(self) -> NonZeroU32
 	{
 		let usize = self.to_usize();
-		debug_assert!(usize <= ::std::u32::MAX as usize, "exceeds `{}` ::std::u32::MAX `{}`", usize, ::std::u32::MAX);
+		debug_assert!(usize <= u32::MAX as usize, "exceeds `{}` u32::MAX `{}`", usize, u32::MAX);
 		NonZeroU32::non_zero_unchecked(usize as u32)
 	}
 

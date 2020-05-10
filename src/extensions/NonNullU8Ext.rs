@@ -78,7 +78,7 @@ pub trait NonNullU8Ext: Sized + Copy + Ord + Debug
 	fn difference_u32(self, other: Self) -> u32
 	{
 		let difference_usize = self.difference(other);
-		debug_assert!(difference_usize <= ::std::u32::MAX as usize, "difference `{}` exceeds ::std::u32::MAX `{}`", difference_usize, ::std::u32::MAX);
+		debug_assert!(difference_usize <= u32::MAX as usize, "difference `{}` exceeds u32::MAX `{}`", difference_usize, u32::MAX);
 		difference_usize as u32
 	}
 
