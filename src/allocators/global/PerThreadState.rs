@@ -5,11 +5,11 @@
 #[doc(hidden)]
 pub struct PerThreadState<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>>
 {
-	pub current_allocator_in_use: CurrentAllocatorInUse,
+	current_allocator_in_use: CurrentAllocatorInUse,
 
-	pub coroutine_local_allocator: Option<CoroutineLocalAllocator>,
+	coroutine_local_allocator: Option<CoroutineLocalAllocator>,
 
-	pub thread_local_allocator: Option<ThreadLocalAllocator>,
+	thread_local_allocator: Option<ThreadLocalAllocator>,
 
 	marker: PhantomData<HeapSize>,
 }

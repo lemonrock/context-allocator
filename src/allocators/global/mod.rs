@@ -7,9 +7,6 @@ use static_assertions::_core::marker::PhantomData;
 use std::mem::replace;
 
 
-include!("choose_allocator.rs");
-
-
 include!("CurrentAllocatorInUse.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocatorInstance.rs");

@@ -4,7 +4,7 @@
 
 /// A trait that all such allocators implement.
 ///
-/// Create a new instance using the macro `global_thread_and_coroutine_switchable_allocator`.
+/// Create a new instance using `GlobalThreadAndCoroutineSwitchableAllocatorInstance`.
 pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: Sized>: Sync + GlobalAlloc + AllocRef + Allocator
 {
 	/// Type of the coroutine local allocator.
@@ -21,23 +21,51 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: Sized>: Sync + G
 	/// Used before calling a coroutine.
 	///
 	/// Used after calling a coroutine.
-	fn replace_coroutine_local_allocator(&self, replacement: Option<Self::CoroutineLocalAllocator>) -> Option<Self::CoroutineLocalAllocator>;
+	#[inline(always)]
+	fn replace_coroutine_local_allocator(&self, replacement: Option<Self::CoroutineLocalAllocator>) -> Option<Self::CoroutineLocalAllocator>
+	{
+		self.use_per_thread_state(|per_thread_state| replace(&mut per_thread_state.coroutine_local_allocator, replacement))
+	}
 
 	/// Initializes the thread local allocator.
-	fn initialize_thread_local_allocator(&self, thread_local_allocator: Self::ThreadLocalAllocator);
+	#[inline(always)]
+	fn initialize_thread_local_allocator(&self, thread_local_allocator: Self::ThreadLocalAllocator)
+	{
+		self.use_per_thread_state(|per_thread_state|
+		{
+			debug_assert!(per_thread_state.thread_local_allocator.is_none(), "Already initialized thread local allocator");
+			
+			per_thread_state.thread_local_allocator = Some(thread_local_allocator)
+		})
+	}
 
 	/// Drops the thread local allocator.
 	///
 	/// Panics in debug if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
-	///
-	/// Could be made hidden by using a destructor with `libc::pthread_key_create()` for an otherwise unused key.
-	fn drop_thread_local_allocator(&self);
+	#[inline(always)]
+	fn drop_thread_local_allocator(&self)
+	{
+		self.use_per_thread_state(|per_thread_state|
+		{
+			debug_assert!(per_thread_state.thread_local_allocator.is_some(), "Already deinitialized thread local allocator");
+			
+			per_thread_state.thread_local_allocator = None
+		})
+	}
 
 	/// Save the current allocator in use.
-	fn save_current_allocator_in_use(&self) -> CurrentAllocatorInUse;
+	#[inline(always)]
+	fn save_current_allocator_in_use(&self) -> CurrentAllocatorInUse
+	{
+		self.use_per_thread_state(|per_thread_state| per_thread_state.current_allocator_in_use)
+	}
 
 	/// Restore the current allocator in use.
-	fn restore_current_allocator_in_use(&self, restore_to: CurrentAllocatorInUse);
+	#[inline(always)]
+	fn restore_current_allocator_in_use(&self, restore_to: CurrentAllocatorInUse)
+	{
+		self.use_per_thread_state(|per_thread_state| per_thread_state.current_allocator_in_use = restore_to)
+	}
 
 	/// Replace the current allocator in use.
 	#[inline(always)]
@@ -68,8 +96,8 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: Sized>: Sync + G
 	{
 		self.callback_with_different_current_allocator(CurrentAllocatorInUse::Global, callback)
 	}
-
-	/// Switch the current allocator in use and execute the callback; restore it after calling the callback unless a panic occurs.
+	
+	#[doc(hidden)]
 	#[inline(always)]
 	fn callback_with_different_current_allocator<R>(&self, different: CurrentAllocatorInUse, callback: impl FnOnce() -> R) -> R
 	{
@@ -79,33 +107,14 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: Sized>: Sync + G
 		self.restore_current_allocator_in_use(restore_to);
 		result
 	}
-
-	/// Obtain the current coroutine local allocator, if any.
-	fn coroutine_local_allocator(&self) -> Option<&Self::CoroutineLocalAllocator>;
-
-	/// Obtain the coroutine local allocator.
-	///
-	/// Panics if no coroutine local allocator has been assigned with `replace_coroutine_local_allocator()`.
+	
+	#[doc(hidden)]
 	#[inline(always)]
-	fn coroutine_local_allocator_unchecked(&self) -> &Self::CoroutineLocalAllocator
+	fn use_per_thread_state<User: FnOnce(&mut PerThreadState<HeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>) -> R, R>(&self, user: User) -> R
 	{
-		self.coroutine_local_allocator().expect("Assign the coroutine local allocator first using `replace_coroutine_local_allocator()`")
+		unsafe { user(&mut * (self.per_thread_state())().as_ptr()) }
 	}
-
-	/// Obtain the thread local allocator.
-	///
-	/// None if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
-	fn thread_local_allocator(&self) -> Option<&Self::ThreadLocalAllocator>;
-
-	/// Obtain the thread local allocator.
-	///
-	/// Panics if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
-	#[inline(always)]
-	fn thread_local_allocator_unchecked(&self) -> &Self::ThreadLocalAllocator
-	{
-		self.thread_local_allocator().expect("Initialize the thread local allocator first using `initialize_thread_local_allocator()`")
-	}
-
-	/// Obtain the global allocator.
-	fn global_allocator(&self) -> &Self::GlobalAllocator;
+	
+	#[doc(hidden)]
+	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<HeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>>;
 }

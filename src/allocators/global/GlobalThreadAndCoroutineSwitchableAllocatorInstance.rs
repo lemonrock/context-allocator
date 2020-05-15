@@ -2,11 +2,13 @@
 // Copyright © 2020 The developers of linux-support. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/linux-support/master/COPYRIGHT.
 
 
-/// Used for a global allocator.
+/// Used for a global allocator with the `#[global_allocator]` trait.
+///
+/// See documentation of `new()`.
 #[derive(Debug)]
 pub struct GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator>
 {
-	pub(crate) global_allocator: GlobalAllocator,
+	global_allocator: GlobalAllocator,
 	
 	per_thread_state: fn() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>,
 	
@@ -25,6 +27,32 @@ unsafe impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHe
 unsafe impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> AllocRef for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	alloc_ref!();
+}
+
+macro_rules! choose_allocator
+{
+	($self: ident, $current_memory: ident, $callback: ident, $($argument: ident),*) =>
+	{
+		{
+			if let Some(coroutine_local_allocator) = $self.coroutine_local_allocator()
+			{
+				if likely!(coroutine_local_allocator.contains($current_memory))
+				{
+					return coroutine_local_allocator.$callback($($argument, )*)
+				}
+			}
+
+			if let Some(thread_local_allocator) = $self.thread_local_allocator()
+			{
+				if likely!(thread_local_allocator.contains($current_memory))
+				{
+					return thread_local_allocator.$callback($($argument, )*)
+				}
+			}
+
+			$self.global_allocator().$callback($($argument, )*)
+		}
+	}
 }
 
 impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
@@ -70,57 +98,11 @@ impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemor
 	type ThreadLocalAllocator = ThreadLocalAllocator;
 	
 	type GlobalAllocator = GlobalAllocator;
-
+	
 	#[inline(always)]
-	fn replace_coroutine_local_allocator(&self, replacement: Option<Self::CoroutineLocalAllocator>) -> Option<Self::CoroutineLocalAllocator>
+	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>
 	{
-		unsafe { replace(&mut self.per_thread_state_mut().coroutine_local_allocator, replacement) }
-	}
-
-	#[inline(always)]
-	fn initialize_thread_local_allocator(&self, thread_local_allocator: Self::ThreadLocalAllocator)
-	{
-		debug_assert!(unsafe { self.per_thread_state().thread_local_allocator.is_none() }, "Already initialized thread local allocator");
-
-		unsafe { self.per_thread_state_mut().thread_local_allocator = Some(thread_local_allocator) }
-	}
-
-	#[inline(always)]
-	fn drop_thread_local_allocator(&self)
-	{
-		debug_assert!(unsafe { self.per_thread_state().thread_local_allocator.is_some() }, "Already deinitialized thread local allocator");
-
-		unsafe { self.per_thread_state_mut().thread_local_allocator = None }
-	}
-
-	#[inline(always)]
-	fn save_current_allocator_in_use(&self) -> CurrentAllocatorInUse
-	{
-		unsafe { self.per_thread_state_mut().current_allocator_in_use }
-	}
-
-	#[inline(always)]
-	fn restore_current_allocator_in_use(&self, restore_to: CurrentAllocatorInUse)
-	{
-		unsafe { self.per_thread_state_mut().current_allocator_in_use = restore_to }
-	}
-
-	#[inline(always)]
-	fn coroutine_local_allocator(&self) -> Option<&Self::CoroutineLocalAllocator>
-	{
-		unsafe { self.per_thread_state_mut().coroutine_local_allocator.as_ref() }
-	}
-
-	#[inline(always)]
-	fn thread_local_allocator(&self) -> Option<&Self::ThreadLocalAllocator>
-	{
-		unsafe { self.per_thread_state_mut().thread_local_allocator.as_ref() }
-	}
-
-	#[inline(always)]
-	fn global_allocator(&self) -> &Self::GlobalAllocator
-	{
-		&self.global_allocator
+		self.per_thread_state
 	}
 }
 
@@ -145,9 +127,10 @@ impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemor
 	/// It can be used as follows:-
 	/// ```
 	///	use context_allocator::allocators::global::GlobalThreadAndCoroutineSwitchableAllocatorInstance;
-	/// #[global_allocator] static GLOBAL: GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator> = GlobalThreadAndCoroutineSwitchableAllocatorInstance::new
+	/// use std::alloc::System;
+	/// #[global_allocator] static GLOBAL: GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, System> = GlobalThreadAndCoroutineSwitchableAllocatorInstance::new
 	/// (
-	/// 	GlobalAllocator::new(),
+	/// 	System,
 	/// 	per_thread_state,
 	/// );
 	/// ```
@@ -163,14 +146,29 @@ impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemor
 	}
 	
 	#[inline(always)]
-	unsafe fn per_thread_state<'a>(&self) -> &'a PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>
+	fn coroutine_local_allocator(&self) -> Option<&CoroutineLocalAllocator>
 	{
-		& * (self.per_thread_state)().as_ptr()
+		self.use_per_thread_state(|per_thread_state| match &per_thread_state.coroutine_local_allocator
+		{
+			&Some(ref x) => Some(unsafe { & * (x as *const CoroutineLocalAllocator) }),
+			&None => None,
+		})
+	}
+
+	#[inline(always)]
+	fn thread_local_allocator(&self) -> Option<&ThreadLocalAllocator>
+	{
+		self.use_per_thread_state(|per_thread_state| match &per_thread_state.thread_local_allocator
+		{
+			&Some(ref x) => Some(unsafe { & * (x as *const ThreadLocalAllocator) }),
+			&None => None,
+		})
 	}
 	
 	#[inline(always)]
-	unsafe fn per_thread_state_mut<'a>(&self) -> &'a mut PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>
+	fn global_allocator(&self) -> &GlobalAllocator
 	{
-		&mut * (self.per_thread_state)().as_ptr()
+		&self.global_allocator
 	}
 }
+
