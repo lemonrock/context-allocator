@@ -5,7 +5,7 @@
 use super::*;
 
 
-include!("alloc.rs");
+include!("alloc_ref.rs");
 include!("global_alloc.rs");
 
 

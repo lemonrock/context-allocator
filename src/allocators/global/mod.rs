@@ -4,11 +4,15 @@
 
 use super::*;
 use static_assertions::_core::marker::PhantomData;
+use std::mem::replace;
+
+
+include!("choose_allocator.rs");
 
 
 include!("CurrentAllocatorInUse.rs");
-include!("global_thread_and_coroutine_switchable_allocator.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
+include!("GlobalThreadAndCoroutineSwitchableAllocatorInstance.rs");
 include!("LifetimeHint.rs");
 include!("LocalAllocator.rs");
 include!("MemoryRange.rs");

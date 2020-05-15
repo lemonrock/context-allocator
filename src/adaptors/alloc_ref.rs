@@ -4,7 +4,7 @@
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! alloc
+macro_rules! alloc_ref
 {
 	() =>
 	{
