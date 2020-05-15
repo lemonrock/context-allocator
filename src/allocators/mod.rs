@@ -5,7 +5,11 @@
 use super::*;
 
 
-pub(crate) mod binary_search_trees;
+use self::bit_set::*;
+
+
+/// A binary search tree based allocator.
+pub mod binary_search_trees;
 
 
 /// A bit set based allocator; allows reallocations, but requires a linear scan to find free blocks.
@@ -19,4 +23,3 @@ pub mod bit_set;
 include!("Allocator.rs");
 include!("BumpAllocator.rs");
 include!("ContextAllocator.rs");
-include!("MultipleBinarySearchTreeAllocator.rs");

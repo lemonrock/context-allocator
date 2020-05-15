@@ -20,17 +20,6 @@ pub struct MultipleBinarySearchTreeAllocator<MS: MemorySource>
 {
 	inner: BinarySearchTreesWithCachedKnowledgeOfFirstChild,
 	memory_source: MS,
-	allocations_start_from: MemoryAddress,
-	memory_source_size: NonZeroUsize,
-}
-
-impl<MS: MemorySource> Drop for MultipleBinarySearchTreeAllocator<MS>
-{
-	#[inline(always)]
-	fn drop(&mut self)
-	{
-		self.memory_source.release(self.memory_source_size, self.allocations_start_from)
-	}
 }
 
 impl<MS: MemorySource> Debug for MultipleBinarySearchTreeAllocator<MS>
@@ -215,12 +204,18 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 }
 
-impl<MS: MemorySource> LocalAllocator for MultipleBinarySearchTreeAllocator<MS>
+impl<MS: MemorySource> LocalAllocator<MS> for MultipleBinarySearchTreeAllocator<MS>
 {
+	#[inline(always)]
+	fn new_local_allocator(memory_source: MS, _lifetime_hint: LifetimeHint, _block_size_hint: NonZeroUsize) -> Self
+	{
+		Self::new(memory_source)
+	}
+	
 	#[inline(always)]
 	fn memory_range(&self) -> MemoryRange
 	{
-		MemoryRange::new(self.allocations_start_from, self.allocations_start_from.add_non_zero(self.memory_source_size))
+		self.memory_source.memory_range()
 	}
 }
 
@@ -231,23 +226,20 @@ impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 	/// The provided memory must be at least as long as the minimum block size.
 	///
 	/// The memory must be aligned to `BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment`, which is the same as the size of a `Node`.
-	pub fn new(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	pub fn new(memory_source: MS) -> Self
 	{
 		debug_assert_ne!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees, 0, "There must be at least one binary search tree");
 
-		let allocations_start_from = memory_source.obtain(memory_source_size)?;
-		let mut memory_address = allocations_start_from;
+		let mut memory_address = memory_source.allocations_start_from();
 		debug_assert!(memory_address.is_aligned_to(BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment), "memory is not aligned to `{:?}`", BinarySearchTreesWithCachedKnowledgeOfFirstChild::MinimumAlignment);
 
 		let this = Self
 		{
 			inner: BinarySearchTreesWithCachedKnowledgeOfFirstChild::default(),
 			memory_source,
-			allocations_start_from,
-			memory_source_size,
 		};
 
-		let mut size = memory_source_size.get();
+		let mut size = this.memory_source.size().get();
 		let mut last_binary_search_tree_index = BinarySearchTreesWithCachedKnowledgeOfFirstChild::NumberOfBinarySearchTrees;
 		while likely!(last_binary_search_tree_index > 0)
 		{
@@ -280,8 +272,8 @@ impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 			}
 			last_binary_search_tree_index = binary_search_tree_index;
 		}
-
-		Ok(this)
+		
+		this
 	}
 
 	#[inline(always)]

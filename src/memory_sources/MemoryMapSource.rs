@@ -9,41 +9,32 @@
 /// When dropped, any memory obtained with this allocator is ***NOT*** freed.
 ///
 /// However, it is appropriate as a 'backing store' for other memory sources.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MemoryMapSource
-{
-	/// Mapped memory settings.
-	pub settings: MappedMemorySettings,
-
-	/// Defaults.
-	pub defaults: DefaultPageSizeAndHugePageSizes
-}
+#[derive(Debug)]
+pub struct MemoryMapSource(MappedMemory);
 
 impl MemorySource for MemoryMapSource
 {
 	#[inline(always)]
-	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn size(&self) -> NonZeroUsize
 	{
-		let mapped_memory = self.settings.anonymous_memory_map(unsafe { NonZeroU64::new_unchecked(non_zero_size.get() as u64) }, &self.defaults).map_err(|_: MemoryMapError| AllocErr)?;
-		let memory_address: MemoryAddress = mapped_memory.virtual_address().into();
-		forget(mapped_memory);
-		Ok(memory_address)
+		let size = self.0.mapped_size_in_bytes();
+		debug_assert_ne!(size, 0, "MappedMemory that is unsized is unsupported");
+		unsafe { NonZeroUsize::new_unchecked(size) }
 	}
-
+	
 	#[inline(always)]
-	fn release(&self, non_zero_size: NonZeroUsize, current_memory: MemoryAddress)
+	fn allocations_start_from(&self) -> MemoryAddress
 	{
-		let result = unsafe { munmap(current_memory.as_ptr() as *mut c_void, non_zero_size.get()) };
-		if likely!(result == 0)
-		{
-		}
-		else if likely!(result == -1)
-		{
-			panic!("munmap() returned an error of {}", errno())
-		}
-		else
-		{
-			panic!("munmap() failed with an unexpected exit code of {:?}", result)
-		}
+		self.0.virtual_address().into()
+	}
+}
+
+impl MemoryMapSource
+{
+	/// New instance.
+	#[inline(always)]
+	pub fn new(size: NonZeroU64, settings: MappedMemorySettings, defaults: &DefaultPageSizeAndHugePageSizes) -> Result<Self, MemoryMapError>
+	{
+		settings.anonymous_memory_map(size, defaults).map(|mapped_memory| Self(mapped_memory))
 	}
 }

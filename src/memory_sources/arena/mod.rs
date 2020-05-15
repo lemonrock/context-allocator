@@ -5,7 +5,7 @@
 use super::*;
 
 
-include!("ArenaMemorySource.rs");
+include!("Arena.rs");
 include!("SlotIndex.rs");
 include!("UnallocatedBlock.rs");
 include!("Unsized.rs");

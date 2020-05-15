@@ -4,7 +4,7 @@
 
 /// An arena memory source.
 #[derive(Debug)]
-pub struct ArenaMemorySource<MS: MemorySource>
+pub struct Arena<MS: MemorySource>
 {
 	next_available_slot_index: Cell<SlotIndex>,
 
@@ -16,7 +16,7 @@ pub struct ArenaMemorySource<MS: MemorySource>
 	memory_source_size: NonZeroUsize,
 }
 
-impl<MS: MemorySource> Drop for ArenaMemorySource<MS>
+impl<MS: MemorySource> Drop for Arena<MS>
 {
 	#[inline(always)]
 	fn drop(&mut self)
@@ -25,7 +25,7 @@ impl<MS: MemorySource> Drop for ArenaMemorySource<MS>
 	}
 }
 
-impl<MS: MemorySource> MemorySource for ArenaMemorySource<MS>
+impl<MS: MemorySource> MemorySource for Arena<MS>
 {
 	#[inline(always)]
 	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
@@ -57,7 +57,7 @@ impl<MS: MemorySource> MemorySource for ArenaMemorySource<MS>
 	}
 }
 
-impl<MS: MemorySource> ArenaMemorySource<MS>
+impl<MS: MemorySource> Arena<MS>
 {
 	/// Create a new instance by memory size and block size.
 	#[inline(always)]

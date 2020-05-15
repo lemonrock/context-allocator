@@ -32,7 +32,7 @@
 #[macro_export]
 macro_rules! global_thread_and_coroutine_switchable_allocator
 {
-	($mod_name: ident, $CoroutineLocalAllocator: ty, $ThreadLocalAllocator: ty, $GlobalAllocator: ty, $global_allocator_instance: expr) =>
+	($mod_name: ident, $CoroutineLocalAllocator: ty, $ThreadLocalAllocator: ty, $GlobalAllocator: ty, $global_allocator_instance: expr, $HeapSize: expr) =>
 	{
 		#[global_allocator] static GLOBAL: $mod_name::GlobalThreadAndCoroutineSwitchableAllocatorInstance = $mod_name::GlobalThreadAndCoroutineSwitchableAllocatorInstance
 		{
@@ -47,7 +47,7 @@ macro_rules! global_thread_and_coroutine_switchable_allocator
 			/// Effectively this is a field of `GlobalThreadAndCoroutineSwitchableAllocatorInstance` with a different value for each thread.
 			///
 			/// It is this piece of logic that necessitates this macro definition.
-			#[thread_local] static mut per_thread_state: PerThreadState<$CoroutineLocalAllocator, $ThreadLocalAllocator> = PerThreadState::empty();
+			#[thread_local] static mut per_thread_state: PerThreadState<[u8; $HeapSize], $CoroutineLocalAllocator, $ThreadLocalAllocator> = PerThreadState::empty();
 			
 			#[derive(Debug)]
 			pub(crate) struct GlobalThreadAndCoroutineSwitchableAllocatorInstance
@@ -105,7 +105,7 @@ macro_rules! global_thread_and_coroutine_switchable_allocator
 				}
 			}
 
-			impl GlobalThreadAndCoroutineSwitchableAllocator for GlobalThreadAndCoroutineSwitchableAllocatorInstance
+			impl GlobalThreadAndCoroutineSwitchableAllocator<[u8; $HeapSize]> for GlobalThreadAndCoroutineSwitchableAllocatorInstance
 			{
 				type CoroutineLocalAllocator = $CoroutineLocalAllocator;
 

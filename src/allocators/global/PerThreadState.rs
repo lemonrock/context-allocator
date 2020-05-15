@@ -3,17 +3,18 @@
 
 
 #[doc(hidden)]
-#[allow(dead_code)]
-pub struct PerThreadState<CoroutineLocalAllocator: LocalAllocator, ThreadLocalAllocator: LocalAllocator>
+pub struct PerThreadState<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>>
 {
 	pub current_allocator_in_use: CurrentAllocatorInUse,
 
 	pub coroutine_local_allocator: Option<CoroutineLocalAllocator>,
 
 	pub thread_local_allocator: Option<ThreadLocalAllocator>,
+
+	marker: PhantomData<HeapSize>,
 }
 
-impl<CoroutineLocalAllocator: LocalAllocator, ThreadLocalAllocator: LocalAllocator> PerThreadState<CoroutineLocalAllocator, ThreadLocalAllocator>
+impl<HeapSize: Sized, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>> PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>
 {
 	#[doc(hidden)]
 	#[inline(always)]
@@ -24,6 +25,7 @@ impl<CoroutineLocalAllocator: LocalAllocator, ThreadLocalAllocator: LocalAllocat
 			current_allocator_in_use: CurrentAllocatorInUse::Global,
 			coroutine_local_allocator: None,
 			thread_local_allocator: None,
+			marker: PhantomData,
 		}
 	}
 }

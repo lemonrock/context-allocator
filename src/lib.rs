@@ -77,12 +77,10 @@ use self::adaptors::*;
 use self::allocators::*;
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
-use self::bit_set::*;
 use self::extensions::*;
 use self::global::*;
 use self::memory_sources::*;
 use either::*;
-use libc::*;
 use likely::*;
 use std::alloc::CannotReallocInPlace;
 use std::alloc::Layout;
@@ -103,6 +101,7 @@ use std::mem::align_of;
 use std::mem::size_of;
 use std::mem::transmute;
 use std::num::NonZeroU32;
+use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
 use std::ops::Add;
 use std::ops::Deref;
@@ -112,7 +111,6 @@ use std::ops::SubAssign;
 use std::ptr::NonNull;
 use std::ptr::null;
 use std::ptr::null_mut;
-use std::rc::Rc;
 
 
 /// Adapt various allocator traits to one another.

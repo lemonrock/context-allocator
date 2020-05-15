@@ -2,18 +2,21 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// A memory source is a sort-of crude allocator that can obtain and release memory, from, say, the operating system, an arena or some fixed range.
+/// A memory source is a sort-of crude allocator that can release memory, originally obtained, say, the operating system, an arena or some fixed range.
 ///
 /// It is thread-aware but not necessarily thread-safe.
-pub trait MemorySource: Debug
+pub trait MemorySource
 {
-	/// Obtain memory from the operating system, say.
-	///
-	/// Alignment will be whatever is appropriate, but is likely to be quite large.
-	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>;
-
-	/// Release memory to the operating system, say.
-	///
-	/// Alignment will be whatever is appropriate, but is likely to be quite large.
-	fn release(&self, non_zero_size: NonZeroUsize, current_memory: MemoryAddress);
+	/// Size.
+	fn size(&self) -> NonZeroUsize;
+	
+	/// Start.
+	fn allocations_start_from(&self) -> MemoryAddress;
+	
+	/// Memory range.
+	#[inline(always)]
+	fn memory_range(&self) -> MemoryRange
+	{
+		MemoryRange::new(self.allocations_start_from(), self.allocations_start_from().add_non_zero(self.size()))
+	}
 }

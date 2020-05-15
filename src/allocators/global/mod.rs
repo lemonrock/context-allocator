@@ -3,11 +3,13 @@
 
 
 use super::*;
+use static_assertions::_core::marker::PhantomData;
 
 
 include!("CurrentAllocatorInUse.rs");
 include!("global_thread_and_coroutine_switchable_allocator.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
+include!("LifetimeHint.rs");
 include!("LocalAllocator.rs");
 include!("MemoryRange.rs");
 include!("PerThreadState.rs");

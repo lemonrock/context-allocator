@@ -29,6 +29,7 @@
 
 
 use super::*;
+use crate::allocators::global::{LocalAllocator, MemoryRange, LifetimeHint};
 
 
 pub(crate) mod red_black_tree;
@@ -36,3 +37,4 @@ pub(crate) mod red_black_tree;
 
 include!("BinarySearchTreesWithCachedKnowledgeOfFirstChild.rs");
 include!("BinarySearchTreeWithCachedKnowledgeOfFirstChild.rs");
+include!("MultipleBinarySearchTreeAllocator.rs");

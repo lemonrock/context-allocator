@@ -5,13 +5,13 @@
 /// A trait that all such allocators implement.
 ///
 /// Create a new instance using the macro `global_thread_and_coroutine_switchable_allocator`.
-pub trait GlobalThreadAndCoroutineSwitchableAllocator: Sync + GlobalAlloc + AllocRef + Allocator
+pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: Sized>: Sync + GlobalAlloc + AllocRef + Allocator
 {
 	/// Type of the coroutine local allocator.
-	type CoroutineLocalAllocator: LocalAllocator;
+	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>;
 
 	/// Type of the thread local allocator.
-	type ThreadLocalAllocator: LocalAllocator;
+	type ThreadLocalAllocator: LocalAllocator<MemoryMapSource>;
 
 	/// Type of the global allocator.
 	type GlobalAllocator: Allocator;

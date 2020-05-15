@@ -3,16 +3,13 @@
 
 
 use super::*;
+use linux_support::memory::huge_pages::DefaultPageSizeAndHugePageSizes;
+use linux_support::memory::mapping::*;
+use magic_ring_buffer::*;
 
 
-/// A memory source which uses an arena.
-pub mod arena_memory_source;
-
-
-/// A memory map (mmap) based allocator with support for NUMA.
-#[cfg(unix)]
-pub mod mmap;
-
-
+include!("CoroutineHeapMemory.rs");
+include!("CoroutineHeapMemorySource.rs");
+include!("CoroutineStackMemory.rs");
 include!("MemorySource.rs");
-include!("RcMemorySource.rs");
+include!("MemoryMapSource.rs");

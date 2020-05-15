@@ -16,16 +16,6 @@ pub struct BitSetAllocator<MS: MemorySource>
 	block_size: BlockSize,
 
 	memory_source: MS,
-	memory_source_size: NonZeroUsize,
-}
-
-impl<MS: MemorySource> Drop for BitSetAllocator<MS>
-{
-	#[inline(always)]
-	fn drop(&mut self)
-	{
-		self.memory_source.release(self.memory_source_size, self.allocations_start_from)
-	}
 }
 
 impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
@@ -164,8 +154,14 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 }
 
-impl<MS: MemorySource> LocalAllocator for BitSetAllocator<MS>
+impl<MS: MemorySource> LocalAllocator<MS> for BitSetAllocator<MS>
 {
+	#[inline(always)]
+	fn new_local_allocator(memory_source: MS, _lifetime_hint: LifetimeHint, block_size_hint: NonZeroUsize) -> Self
+	{
+		Self::new_by_amount(memory_source, block_size_hint)
+	}
+	
 	#[inline(always)]
 	fn memory_range(&self) -> MemoryRange
 	{
@@ -175,68 +171,63 @@ impl<MS: MemorySource> LocalAllocator for BitSetAllocator<MS>
 
 impl<MS: MemorySource> BitSetAllocator<MS>
 {
-	/// New instance wrapping a block of memory for an 8 byte block size.
-	#[inline(always)]
-	pub fn new_by_amount_8(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
-	{
-		Self::new_by_amount(memory_source, 8usize.non_zero(), memory_source_size)
-	}
-
-	/// New instance wrapping a block of memory for a 16 byte block size.
-	#[inline(always)]
-	pub fn new_by_amount_16(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
-	{
-		Self::new_by_amount(memory_source, 16usize.non_zero(), memory_source_size)
-	}
-
-	/// New instance wrapping a block of memory for a 32 byte block size.
-	#[inline(always)]
-	pub fn new_by_amount_32(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
-	{
-		Self::new_by_amount(memory_source, 32usize.non_zero(), memory_source_size)
-	}
-
 	/// Create a new instance by memory size and block size.
 	#[inline(always)]
-	pub fn new_by_amount(memory_source: MS, block_size: NonZeroUsize, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	pub fn new_by_amount(memory_source: MS, block_size: NonZeroUsize) -> Self
 	{
-		let number_of_blocks = ((memory_source_size.get() + (block_size.get() - 1)) / block_size.get()).non_zero();
-
+		let number_of_blocks = Self::number_of_blocks(block_size, memory_source.size());
+		
 		Self::new(memory_source, block_size, number_of_blocks)
 	}
-
-	/// Create a new instance.
+	
+	/// Calculate number of blocks required.
 	#[inline(always)]
-	pub fn new(memory_source: MS, block_size: NonZeroUsize, number_of_blocks: NonZeroUsize) -> Result<Self, AllocErr>
+	fn number_of_blocks(block_size: NonZeroUsize, memory_source_size: NonZeroUsize) -> NonZeroUsize
+	{
+		let C = NumberOfBits::InBitSetWord.to_usize();
+		
+		let block_size = block_size.get();
+		let memory_source_size = memory_source_size.get();
+		
+		let number_of_blocks = (memory_source_size * C) / ((C + 1) * block_size);
+		if number_of_blocks == 0
+		{
+			panic!("Can not allocate any blocks")
+		}
+		number_of_blocks.non_zero()
+	}
+	
+	#[inline(always)]
+	fn new(memory_source: MS, block_size: NonZeroUsize, number_of_blocks: NonZeroUsize) -> Self
 	{
 		debug_assert!(block_size.is_power_of_two(), "block_size `{:?}` must be a power of 2", block_size);
 		debug_assert!(block_size.get() >= BitSetWord::SizeInBytes, "block_size `{:?}` must at least `{:?}` so that the bit set metadata holding free blocks can be allocated contiguous with the memory used for blocks", block_size, BitSetWord::SizeInBytes);
 
 		let size_in_bytes = number_of_blocks.get() << block_size.logarithm_base2();
 		let bit_set_size_in_bytes = number_of_blocks.get() / NumberOfBits::InBitSetWord.to_usize();
-		let memory_source_size = (size_in_bytes + bit_set_size_in_bytes).non_zero();
-		let allocations_start_from = memory_source.obtain(memory_source_size)?;
+		let required_memory_source_size = (size_in_bytes + bit_set_size_in_bytes).non_zero();
+		debug_assert!(memory_source.size() >= required_memory_source_size);
+		
+		let allocations_start_from = memory_source.allocations_start_from();
 
 		let allocations_end_at = allocations_start_from.add(size_in_bytes);
 		let (inclusive_start_of_bit_set, exclusive_end_of_bit_set) = Self::initialize_bit_set_so_all_memory_is_unallocated(allocations_end_at, bit_set_size_in_bytes);
+		debug_assert!(inclusive_start_of_bit_set.into_memory_address() >= allocations_end_at);
+		debug_assert_eq!(exclusive_end_of_bit_set.into_memory_address(), memory_source.allocations_start_from().add_non_zero(memory_source.size()));
 
-		Ok
-		(
-			Self
-			{
-				inclusive_start_of_bit_set,
-				exclusive_end_of_bit_set,
-				start_search_for_next_allocation_at: Cell::new(inclusive_start_of_bit_set),
+		Self
+		{
+			inclusive_start_of_bit_set,
+			exclusive_end_of_bit_set,
+			start_search_for_next_allocation_at: Cell::new(inclusive_start_of_bit_set),
 
-				allocations_start_from,
-				allocations_end_at,
+			allocations_start_from,
+			allocations_end_at,
 
-				block_size: BlockSize::new(block_size),
-
-				memory_source_size,
-				memory_source,
-			}
-		)
+			block_size: BlockSize::new(block_size),
+			
+			memory_source,
+		}
 	}
 
 	#[inline(always)]

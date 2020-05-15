@@ -89,8 +89,21 @@ impl<MS: MemorySource> Allocator for ContextAllocator<MS>
 	}
 }
 
-impl<MS: MemorySource> LocalAllocator for ContextAllocator<MS>
+impl<MS: MemorySource> LocalAllocator<MS> for ContextAllocator<MS>
 {
+	#[inline(always)]
+	fn new_local_allocator(memory_source: MS, lifetime_hint: LifetimeHint, block_size_hint: NonZeroUsize) -> Self
+	{
+		use self::LifetimeHint::*;
+		
+		match lifetime_hint
+		{
+			ShortLived => ContextAllocator::ShortLived(BumpAllocator::new_local_allocator(memory_source, lifetime_hint, block_size_hint)),
+			MediumLived => ContextAllocator::MediumLived(BitSetAllocator::new_local_allocator(memory_source, lifetime_hint, block_size_hint)),
+			LongLived => ContextAllocator::LongLived(MultipleBinarySearchTreeAllocator::new_local_allocator(memory_source, lifetime_hint, block_size_hint)),
+		}
+	}
+	
 	#[inline(always)]
 	fn memory_range(&self) -> MemoryRange
 	{

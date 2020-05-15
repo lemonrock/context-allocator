@@ -23,16 +23,6 @@ pub struct BumpAllocator<MS: MemorySource>
 	ends_at_pointer: MemoryAddress,
 
 	memory_source: MS,
-	memory_source_size: NonZeroUsize,
-}
-
-impl<MS: MemorySource> Drop for BumpAllocator<MS>
-{
-	#[inline(always)]
-	fn drop(&mut self)
-	{
-		self.memory_source.release(self.memory_source_size, self.allocations_start_from())
-	}
 }
 
 macro_rules! allocation_ends_at_pointer
@@ -120,8 +110,14 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 	}
 }
 
-impl<MS: MemorySource> LocalAllocator for BumpAllocator<MS>
+impl<MS: MemorySource> LocalAllocator<MS> for BumpAllocator<MS>
 {
+	#[inline(always)]
+	fn new_local_allocator(memory_source: MS, _lifetime_hint: LifetimeHint, _block_size_hint: NonZeroUsize) -> Self
+	{
+		Self::new(memory_source)
+	}
+	
 	#[inline(always)]
 	fn memory_range(&self) -> MemoryRange
 	{
@@ -135,27 +131,23 @@ impl<MS: MemorySource> BumpAllocator<MS>
 
 	/// New instance wrapping a block of memory.
 	#[inline(always)]
-	pub fn new(memory_source: MS, memory_source_size: NonZeroUsize) -> Result<Self, AllocErr>
+	pub fn new(memory_source: MS) -> Self
 	{
-		let allocations_start_from = memory_source.obtain(memory_source_size)?;
+		let allocations_start_from = memory_source.allocations_start_from();
 
-		Ok
-		(
-			Self
-			{
-				most_recent_allocation_pointer: Cell::new(allocations_start_from),
-				next_allocation_at_pointer: Cell::new(allocations_start_from),
-				ends_at_pointer: allocations_start_from.add_non_zero(memory_source_size),
+		Self
+		{
+			most_recent_allocation_pointer: Cell::new(allocations_start_from),
+			next_allocation_at_pointer: Cell::new(allocations_start_from),
+			ends_at_pointer: allocations_start_from.add_non_zero(memory_source.size()),
 
-				memory_source,
-				memory_source_size,
-			}
-		)
+			memory_source,
+		}
 	}
 
 	#[inline(always)]
 	fn allocations_start_from(&self) -> MemoryAddress
 	{
-		self.ends_at_pointer.subtract_non_zero(self.memory_source_size)
+		self.ends_at_pointer.subtract_non_zero(self.memory_source.size())
 	}
 }

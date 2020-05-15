@@ -5,8 +5,11 @@
 /// A local allocator is an allocator with a known range of memory addresses it uses for allocated memory.
 ///
 /// This allows logic to determine which allocator should be used to free (deallocate) which memory pointers.
-pub trait LocalAllocator: Allocator
+pub trait LocalAllocator<MS: MemorySource>: Allocator + Sized
 {
+	/// Creates a new instance.
+	fn new_local_allocator(memory_source: MS, lifetime_hint: LifetimeHint, block_size_hint: NonZeroUsize) -> Self;
+	
 	/// The range of memory addresses that can be used to allocate memory by this allocator.
 	///
 	/// This function is called repeatedly, so ideally should be inline and fast.

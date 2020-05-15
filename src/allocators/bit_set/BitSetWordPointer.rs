@@ -8,6 +8,12 @@ struct BitSetWordPointer(NonNull<BitSetWord>);
 impl BitSetWordPointer
 {
 	#[inline(always)]
+	fn into_memory_address(self) -> MemoryAddress
+	{
+		self.0.cast()
+	}
+	
+	#[inline(always)]
 	fn wrap(memory_address: MemoryAddress) -> Self
 	{
 		debug_assert_eq!(memory_address.to_usize() % BitSetWord::SizeInBytes, 0, "memory_address `{:?}` must be a multiple of 8", memory_address);
