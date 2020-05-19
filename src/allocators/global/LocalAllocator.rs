@@ -5,6 +5,8 @@
 /// A local allocator is an allocator with a known range of memory addresses it uses for allocated memory.
 ///
 /// This allows logic to determine which allocator should be used to free (deallocate) which memory pointers.
+///
+/// ***It is important that a `LocalAllocator` does nothing on `drop()`***.
 pub trait LocalAllocator<MS: MemorySource>: Allocator + Sized
 {
 	/// Creates a new instance.

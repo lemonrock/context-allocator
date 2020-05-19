@@ -2,10 +2,13 @@
 // Copyright © 2020 The developers of linux-support. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/linux-support/master/COPYRIGHT.
 
 
-/// A wrapper type.
-pub type CoroutineHeapMemorySource<HeapSize> = ReferenceCountedLargeRingQueueElement<CoroutineHeapMemory<HeapSize>>;
+/// Heap memory.
+///
+/// We align to the most common page size, 4Kb, which will minimize alignment problems of memory allocations from this heap.
+#[repr(C, align(4096))]
+pub struct CoroutineHeapMemorySource<HeapSize: MemorySize>(NonNull<CoroutineHeapMemory<HeapSize>>);
 
-impl<HeapSize: Sized> MemorySource for CoroutineHeapMemorySource<HeapSize>
+impl<HeapSize: MemorySize> MemorySource for CoroutineHeapMemorySource<HeapSize>
 {
 	#[inline(always)]
 	fn size(&self) -> NonZeroUsize
@@ -18,6 +21,6 @@ impl<HeapSize: Sized> MemorySource for CoroutineHeapMemorySource<HeapSize>
 	#[inline(always)]
 	fn allocations_start_from(&self) -> MemoryAddress
 	{
-		unsafe { self.element() }.cast()
+		self.0.cast()
 	}
 }

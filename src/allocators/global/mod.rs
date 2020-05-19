@@ -5,6 +5,7 @@
 use super::*;
 use static_assertions::_core::marker::PhantomData;
 use std::mem::replace;
+use magic_ring_buffer::memory_sizes::MemorySize;
 
 
 include!("CurrentAllocatorInUse.rs");

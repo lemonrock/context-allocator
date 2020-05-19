@@ -5,7 +5,7 @@
 use super::*;
 use linux_support::memory::huge_pages::DefaultPageSizeAndHugePageSizes;
 use linux_support::memory::mapping::*;
-use magic_ring_buffer::*;
+use magic_ring_buffer::memory_sizes::MemorySize;
 
 
 include!("CoroutineHeapMemory.rs");

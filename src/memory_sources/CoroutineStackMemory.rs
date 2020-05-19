@@ -6,12 +6,12 @@
 ///
 /// On x86-64, the stack needs to be 16 byte aligned with a minimum size of 64 bytes in order to store a `SavedContext`, hence the alignment of `64` (over `16`).
 #[repr(C, align(64))]
-pub struct CoroutineStackMemory<StackSize: Sized>
+pub struct CoroutineStackMemory<StackSize: MemorySize>
 {
 	sizing: StackSize
 }
 
-impl<StackSize: Sized> Debug for CoroutineStackMemory<StackSize>
+impl<StackSize: MemorySize> Debug for CoroutineStackMemory<StackSize>
 {
 	#[inline(always)]
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result
