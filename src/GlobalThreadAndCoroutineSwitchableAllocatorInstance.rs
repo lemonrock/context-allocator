@@ -15,6 +15,10 @@ pub struct GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize: MemoryS
 	marker: PhantomData<(HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator)>,
 }
 
+impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> RefUnwindSafe for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+{
+}
+
 unsafe impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 }

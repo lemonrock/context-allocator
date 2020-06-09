@@ -78,10 +78,12 @@ use self::allocators::*;
 use self::binary_search_trees::*;
 use self::binary_search_trees::red_black_tree::*;
 use self::extensions::*;
-use self::global::*;
 use self::memory_sources::*;
 use either::*;
 use likely::*;
+use linux_support::memory::huge_pages::DefaultPageSizeAndHugePageSizes;
+use linux_support::memory::mapping::*;
+use magic_ring_buffer::memory_sizes::MemorySize;
 use std::alloc::CannotReallocInPlace;
 use std::alloc::Layout;
 use std::alloc::GlobalAlloc;
@@ -97,7 +99,10 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::mem::align_of;
+use std::mem::ManuallyDrop;
+use std::mem::replace;
 use std::mem::size_of;
 use std::mem::transmute;
 use std::num::NonZeroU32;
@@ -105,13 +110,19 @@ use std::num::NonZeroU64;
 use std::num::NonZeroUsize;
 use std::ops::Add;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::ops::Shr;
 use std::ops::Sub;
 use std::ops::SubAssign;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::panic::RefUnwindSafe;
+use std::panic::resume_unwind;
+use std::panic::UnwindSafe;
+use std::ptr::drop_in_place;
 use std::ptr::NonNull;
 use std::ptr::null;
 use std::ptr::null_mut;
-
 
 /// Adapt various allocator traits to one another.
 pub mod adaptors;
@@ -129,7 +140,15 @@ pub mod extensions;
 pub mod memory_sources;
 
 
+include!("CurrentAllocatorInUse.rs");
+include!("GloballyAllocated.rs");
+include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
+include!("GlobalThreadAndCoroutineSwitchableAllocatorInstance.rs");
+include!("LifetimeHint.rs");
+include!("LocalAllocator.rs");
 include!("MemoryAddress.rs");
+include!("MemoryRange.rs");
+include!("PerThreadState.rs");
 
 
 #[cfg(test)] global_thread_and_coroutine_switchable_allocator!(MyGlobalAllocator, BumpAllocator<ArenaMemorySource<MemoryMapSource>>, MultipleBinarySearchTreeAllocator<MemoryMapSource>, GlobalAllocToAllocatorAdaptor<System>, GlobalAllocToAllocatorAdaptor(System));

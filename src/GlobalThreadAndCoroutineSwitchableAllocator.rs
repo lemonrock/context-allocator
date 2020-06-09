@@ -5,7 +5,7 @@
 /// A trait that all such allocators implement.
 ///
 /// Create a new instance using `GlobalThreadAndCoroutineSwitchableAllocatorInstance`.
-pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: MemorySize>: Sync + GlobalAlloc + AllocRef + Allocator
+pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + AllocRef + Allocator
 {
 	/// Type of the coroutine local allocator.
 	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>;
@@ -78,32 +78,36 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: MemorySize>: Syn
 
 	/// Switch the current allocator in use to coroutine local and execute the callback; restore it after calling the callback unless a panic occurs.
 	#[inline(always)]
-	fn callback_with_coroutine_local_allocator<R>(&self, callback: impl FnOnce() -> R) -> R
+	fn callback_with_coroutine_local_allocator<F: FnOnce() -> R + UnwindSafe, R>(&self, callback: F) -> R
 	{
 		self.callback_with_different_current_allocator(CurrentAllocatorInUse::CoroutineLocal, callback)
 	}
 
 	/// Switch the current allocator in use to thread local and execute the callback; restore it after calling the callback unless a panic occurs.
 	#[inline(always)]
-	fn callback_with_thread_local_allocator<R>(&self, callback: impl FnOnce() -> R) -> R
+	fn callback_with_thread_local_allocator<F: FnOnce() -> R + UnwindSafe, R>(&self, callback: F) -> R
 	{
 		self.callback_with_different_current_allocator(CurrentAllocatorInUse::ThreadLocal, callback)
 	}
 
 	/// Switch the current allocator in use to global and execute the callback; restore it after calling the callback unless a panic occurs.
 	#[inline(always)]
-	fn callback_with_global_allocator<R>(&self, callback: impl FnOnce() -> R) -> R
+	fn callback_with_global_allocator<F: FnOnce() -> R + UnwindSafe, R>(&self, callback: F) -> R
 	{
 		self.callback_with_different_current_allocator(CurrentAllocatorInUse::Global, callback)
 	}
 	
 	#[doc(hidden)]
 	#[inline(always)]
-	fn callback_with_different_current_allocator<R>(&self, different: CurrentAllocatorInUse, callback: impl FnOnce() -> R) -> R
+	fn callback_with_different_current_allocator<F: FnOnce() -> R + UnwindSafe, R>(&self, different: CurrentAllocatorInUse, callback: F) -> R
 	{
 		let restore_to = self.save_current_allocator_in_use();
 		self.restore_current_allocator_in_use(different);
-		let result = callback();
+		let result = match catch_unwind(callback)
+		{
+			Ok(result) => result,
+			Err(panic) => resume_unwind(panic)
+		};
 		self.restore_current_allocator_in_use(restore_to);
 		result
 	}

@@ -16,10 +16,6 @@ pub mod binary_search_trees;
 pub mod bit_set;
 
 
-/// Global, switchable allocator.
-#[macro_use] pub mod global;
-
-
 include!("Allocator.rs");
 include!("BumpAllocator.rs");
 include!("ContextAllocator.rs");
