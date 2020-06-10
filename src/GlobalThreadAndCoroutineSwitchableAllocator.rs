@@ -5,10 +5,10 @@
 /// A trait that all such allocators implement.
 ///
 /// Create a new instance using `GlobalThreadAndCoroutineSwitchableAllocatorInstance`.
-pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + AllocRef + Allocator
+pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + AllocRef + Allocator
 {
 	/// Type of the coroutine local allocator.
-	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>;
+	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>;
 
 	/// Type of the thread local allocator.
 	type ThreadLocalAllocator: LocalAllocator<MemoryMapSource>;
@@ -114,11 +114,11 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<HeapSize: MemorySize>: Ref
 	
 	#[doc(hidden)]
 	#[inline(always)]
-	fn use_per_thread_state<User: FnOnce(&mut PerThreadState<HeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>) -> R, R>(&self, user: User) -> R
+	fn use_per_thread_state<User: FnOnce(&mut PerThreadState<CoroutineHeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>) -> R, R>(&self, user: User) -> R
 	{
 		unsafe { user(&mut * (self.per_thread_state())().as_ptr()) }
 	}
 	
 	#[doc(hidden)]
-	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<HeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>>;
+	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<CoroutineHeapSize, Self::CoroutineLocalAllocator, Self::ThreadLocalAllocator>>;
 }

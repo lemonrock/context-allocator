@@ -6,12 +6,12 @@
 ///
 /// We align to the most common page size, 4Kb, which will minimize alignment problems of memory allocations from this heap.
 #[repr(C, align(4096))]
-pub struct CoroutineHeapMemory<HeapSize: MemorySize>
+pub struct CoroutineHeapMemory<CoroutineHeapSize: MemorySize>
 {
-	sizing: HeapSize
+	sizing: CoroutineHeapSize
 }
 
-impl<HeapSize: MemorySize> Debug for CoroutineHeapMemory<HeapSize>
+impl<CoroutineHeapSize: MemorySize> Debug for CoroutineHeapMemory<CoroutineHeapSize>
 {
 	#[inline(always)]
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result
@@ -20,12 +20,12 @@ impl<HeapSize: MemorySize> Debug for CoroutineHeapMemory<HeapSize>
 	}
 }
 
-impl<HeapSize: MemorySize> CoroutineHeapMemory<HeapSize>
+impl<CoroutineHeapSize: MemorySize> CoroutineHeapMemory<CoroutineHeapSize>
 {
 	/// Into a memory source.
 	#[inline(always)]
-	pub const fn into_memory_source(&self) -> CoroutineHeapMemorySource<HeapSize>
+	pub const fn into_memory_source(&self) -> CoroutineHeapMemorySource<CoroutineHeapSize>
 	{
-		CoroutineHeapMemorySource(unsafe { NonNull::new_unchecked(self as *const CoroutineHeapMemory<HeapSize> as *mut CoroutineHeapMemory<HeapSize>) })
+		CoroutineHeapMemorySource(unsafe { NonNull::new_unchecked(self as *const CoroutineHeapMemory<CoroutineHeapSize> as *mut CoroutineHeapMemory<CoroutineHeapSize>) })
 	}
 }

@@ -6,14 +6,14 @@
 ///
 /// We align to the most common page size, 4Kb, which will minimize alignment problems of memory allocations from this heap.
 #[repr(C, align(4096))]
-pub struct CoroutineHeapMemorySource<HeapSize: MemorySize>(NonNull<CoroutineHeapMemory<HeapSize>>);
+pub struct CoroutineHeapMemorySource<CoroutineHeapSize: MemorySize>(NonNull<CoroutineHeapMemory<CoroutineHeapSize>>);
 
-impl<HeapSize: MemorySize> MemorySource for CoroutineHeapMemorySource<HeapSize>
+impl<CoroutineHeapSize: MemorySize> MemorySource for CoroutineHeapMemorySource<CoroutineHeapSize>
 {
 	#[inline(always)]
 	fn size(&self) -> NonZeroUsize
 	{
-		let size = size_of::<CoroutineHeapMemory<HeapSize>>();
+		let size = size_of::<CoroutineHeapMemory<CoroutineHeapSize>>();
 		debug_assert_ne!(size, 0, "Unsized values are not supported");
 		unsafe { NonZeroUsize::new_unchecked(size) }
 	}

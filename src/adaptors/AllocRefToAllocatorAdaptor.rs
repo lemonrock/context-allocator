@@ -53,6 +53,13 @@ impl<A: AllocRef> Allocator for AllocRefToAllocatorAdaptor<A>
 
 impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 {
+	/// New instance.
+	#[inline(always)]
+	pub const fn new(underlying: A) -> Self
+	{
+		Self(underlying)
+	}
+	
 	#[inline(always)]
 	fn mutable_reference(&self) -> &mut A
 	{
@@ -64,4 +71,10 @@ impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 	{
 		unsafe { Layout::from_size_align_unchecked(non_zero_size.get(), non_zero_power_of_two_alignment.get()) }
 	}
+}
+
+impl AllocRefToAllocatorAdaptor<System>
+{
+	/// System malloc.
+	pub const System: Self = Self::new(System);
 }

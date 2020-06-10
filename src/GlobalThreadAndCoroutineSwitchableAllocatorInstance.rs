@@ -6,29 +6,29 @@
 ///
 /// See documentation of `new()`.
 #[derive(Debug)]
-pub struct GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator>
+pub struct GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator>
 {
 	global_allocator: GlobalAllocator,
 	
-	per_thread_state: fn() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>,
+	per_thread_state: fn() -> NonNull<PerThreadState<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>,
 	
-	marker: PhantomData<(HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator)>,
+	marker: PhantomData<(CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator)>,
 }
 
-impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> RefUnwindSafe for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> RefUnwindSafe for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 }
 
-unsafe impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 }
 
-unsafe impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalAlloc for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalAlloc for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	global_alloc!();
 }
 
-unsafe impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> AllocRef for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> AllocRef for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	alloc_ref!();
 }
@@ -59,7 +59,7 @@ macro_rules! choose_allocator
 	}
 }
 
-impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Allocator for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
@@ -95,7 +95,7 @@ impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeap
 	}
 }
 
-impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocator<HeapSize> for GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize> for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	type CoroutineLocalAllocator = CoroutineLocalAllocator;
 	
@@ -104,42 +104,19 @@ impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeap
 	type GlobalAllocator = GlobalAllocator;
 	
 	#[inline(always)]
-	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>
+	fn per_thread_state(&self) -> fn() -> NonNull<PerThreadState<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>
 	{
 		self.per_thread_state
 	}
 }
 
-impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<HeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 	/// New instance, intended to only be used once to construct a static global allocator field.
 	///
-	/// `per_thread_state` is an inlined function to a genuinely thread-local static, viz:-
-	///
-	/// ```
-	/// use context_allocator::allocators::global::PerThreadState;
-	/// use std::ptr::NonNull;
-	///
-	/// #[inline(always)]
-	/// fn per_thread_state() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>
-	/// {
-	/// 	#[thread_local] static mut per_thread_state: PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator> = PerThreadState::empty();
-	/// 	unsafe { NonNull::new_unchecked(&mut per_thread_state) }
-	/// }
-	/// ```
-	///
-	/// It can be used as follows:-
-	/// ```
-	///	use context_allocator::allocators::global::GlobalThreadAndCoroutineSwitchableAllocatorInstance;
-	/// use std::alloc::System;
-	/// #[global_allocator] static GLOBAL: GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, System> = GlobalThreadAndCoroutineSwitchableAllocatorInstance::new
-	/// (
-	/// 	System,
-	/// 	per_thread_state,
-	/// );
-	/// ```
+	/// Prefer `system()` to this.
 	#[inline(always)]
-	pub const fn new(global_allocator: GlobalAllocator, per_thread_state: fn() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>) -> Self
+	pub const fn new(global_allocator: GlobalAllocator, per_thread_state: fn() -> NonNull<PerThreadState<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>) -> Self
 	{
 		Self
 		{
@@ -176,3 +153,36 @@ impl<HeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeap
 	}
 }
 
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>> GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, AllocRefToAllocatorAdaptor<System>>
+{
+	/// New instance, intended to only be used once to construct a static global allocator field.
+	///
+	/// `per_thread_state` is an inlined function to a genuinely thread-local static, viz:-
+	///
+	/// ```
+	/// use context_allocator::allocators::global::PerThreadState;
+	/// use std::ptr::NonNull;
+	///
+	/// #[inline(always)]
+	/// fn per_thread_state() -> NonNull<PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>
+	/// {
+	/// 	#[thread_local] static mut per_thread_state: PerThreadState<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator> = PerThreadState::empty();
+	/// 	unsafe { NonNull::new_unchecked(&mut per_thread_state) }
+	/// }
+	/// ```
+	///
+	/// It can be used as follows:-
+	/// ```
+	///	use context_allocator::allocators::global::GlobalThreadAndCoroutineSwitchableAllocatorInstance;
+	/// use std::alloc::System;
+	/// #[global_allocator] static GLOBAL: GlobalThreadAndCoroutineSwitchableAllocatorInstance<HeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, System> = GlobalThreadAndCoroutineSwitchableAllocatorInstance::system
+	/// (
+	/// 	per_thread_state,
+	/// );
+	/// ```
+	#[inline(always)]
+	pub const fn system(per_thread_state: fn() -> NonNull<PerThreadState<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>) -> Self
+	{
+		Self::new(AllocRefToAllocatorAdaptor::System, per_thread_state)
+	}
+}
