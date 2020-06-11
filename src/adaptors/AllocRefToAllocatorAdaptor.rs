@@ -57,7 +57,7 @@ impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 	#[inline(always)]
 	pub const fn new(underlying: A) -> Self
 	{
-		Self(underlying)
+		Self(UnsafeCell::new(underlying))
 	}
 	
 	#[inline(always)]
