@@ -8,15 +8,14 @@
 /// Since no allocation has occurred, the ThreadAllocator won't be tracking the memory for, say, the `String`.
 /// Hence memory gets freed in a thread-unsafe manner.
 /// Oops!
-#[derive(Debug)]
-pub struct GloballyAllocated<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: 'static + GlobalThreadAndCoroutineSwitchableAllocator<HeapSize>>
+pub struct GloballyAllocated<T: RefUnwindSafe, CoroutineHeapSize: MemorySize, GTACSA: 'static + GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>>
 {
 	value: ManuallyDrop<T>,
 	global_allocator: &'static GTACSA,
-	marker: PhantomData<HeapSize>,
+	marker: PhantomData<CoroutineHeapSize>,
 }
 
-impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<HeapSize>> Drop for GloballyAllocated<T, HeapSize, GTACSA>
+impl<T: RefUnwindSafe, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Drop for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
 {
 	#[inline(always)]
 	fn drop(&mut self)
@@ -25,7 +24,7 @@ impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwi
 	}
 }
 
-impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<HeapSize>> Deref for GloballyAllocated<T, HeapSize, GTACSA>
+impl<T: RefUnwindSafe, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Deref for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
 {
 	type Target = T;
 	
@@ -36,7 +35,77 @@ impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwi
 	}
 }
 
-impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<HeapSize>> GloballyAllocated<T, HeapSize, GTACSA>
+impl<T: RefUnwindSafe + Debug, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Debug for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result
+	{
+		self.deref().fmt(f)
+	}
+}
+
+impl<T: RefUnwindSafe + Display, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Display for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result
+	{
+		self.deref().fmt(f)
+	}
+}
+
+impl<T: RefUnwindSafe + PartialEq, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> PartialEq for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn eq(&self, rhs: &Self) -> bool
+	{
+		self.deref() == rhs.deref()
+	}
+}
+
+impl<T: RefUnwindSafe + Eq, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Eq for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+}
+
+impl<T: RefUnwindSafe + PartialOrd, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> PartialOrd for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn partial_cmp(&self, rhs: &Self) -> Option<Ordering>
+	{
+		self.deref().partial_cmp(rhs.deref())
+	}
+}
+
+impl<T: RefUnwindSafe + Ord, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Ord for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn cmp(&self, rhs: &Self) -> Ordering
+	{
+		self.deref().cmp(rhs.deref())
+	}
+}
+
+impl<T: RefUnwindSafe + Hash, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Hash for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn hash<H: Hasher>(&self, state: &mut H)
+	{
+		self.deref().hash(state)
+	}
+}
+
+impl<T: RefUnwindSafe + Clone, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> Clone for GloballyAllocated<T, CoroutineHeapSize, GTACSA>
+{
+	#[inline(always)]
+	fn clone(&self) -> Self
+	{
+		Self::allocate(self.global_allocator, ||
+		{
+			self.value.deref().clone()
+		})
+	}
+}
+
+impl<T: RefUnwindSafe, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>> GloballyAllocated<T, CoroutineHeapSize, GTACSA>
 {
 	/// Allocate.
 	#[inline(always)]
@@ -55,5 +124,20 @@ impl<T: RefUnwindSafe, HeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwi
 	pub fn as_mut<F: FnOnce(&mut T) -> R + UnwindSafe, R>(&mut self, callback: F) -> R
 	{
 		self.global_allocator.callback_with_global_allocator(AssertUnwindSafe(|| callback(self.value.deref_mut())))
+	}
+}
+
+impl<T: RefUnwindSafe, CoroutineHeapSize: MemorySize, GTACSA: GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize>>  GloballyAllocated<Arc<T>, CoroutineHeapSize, GTACSA>
+{
+	/// Clone specialized for `Arc<T>`.
+	#[inline(always)]
+	pub fn clone_arc(&self) -> Self
+	{
+		Self
+		{
+			value: ManuallyDrop::new(self.value.deref().clone()),
+			global_allocator: self.global_allocator,
+			marker: PhantomData,
+		}
 	}
 }

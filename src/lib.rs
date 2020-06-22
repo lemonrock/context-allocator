@@ -98,7 +98,10 @@ use std::cmp::max;
 use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::mem::align_of;
 use std::mem::ManuallyDrop;
@@ -123,6 +126,8 @@ use std::ptr::drop_in_place;
 use std::ptr::NonNull;
 use std::ptr::null;
 use std::ptr::null_mut;
+use std::sync::Arc;
+
 
 /// Adapt various allocator traits to one another.
 pub mod adaptors;
