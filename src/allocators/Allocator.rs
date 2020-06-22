@@ -3,7 +3,7 @@
 
 
 /// A helper trait that brings together the core, common functionality required to implement the traits `GlobalAlloc` and `Alloc`.
-pub trait Allocator: Sized
+pub trait Allocator: Sized + Debug
 {
 	/// The sentinel value used for a zero-sized allocation.
 	const ZeroSizedAllocation: NonNull<u8> = non_null_pointer(usize::MAX as *mut u8);

@@ -5,6 +5,7 @@
 /// Heap memory.
 ///
 /// We align to the most common page size, 4Kb, which will minimize alignment problems of memory allocations from this heap.
+#[derive(Debug)]
 #[repr(C, align(4096))]
 pub struct CoroutineHeapMemorySource<CoroutineHeapSize: MemorySize>(NonNull<CoroutineHeapMemory<CoroutineHeapSize>>);
 

@@ -7,7 +7,7 @@
 /// This allows logic to determine which allocator should be used to free (deallocate) which memory pointers.
 ///
 /// ***It is important that a `LocalAllocator` does nothing on `drop()`***.
-pub trait LocalAllocator<MS: MemorySource>: Allocator + Sized
+pub trait LocalAllocator<MS: MemorySource>: Allocator + Sized + Debug
 {
 	/// Creates a new instance.
 	fn new_local_allocator(memory_source: MS, lifetime_hint: LifetimeHint, block_size_hint: NonZeroUsize) -> Self;

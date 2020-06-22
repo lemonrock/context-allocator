@@ -5,7 +5,7 @@
 /// A memory source is a sort-of crude allocator that can release memory, originally obtained, say, the operating system, an arena or some fixed range.
 ///
 /// It is thread-aware but not necessarily thread-safe.
-pub trait MemorySource
+pub trait MemorySource: Debug
 {
 	/// Size.
 	fn size(&self) -> NonZeroUsize;
