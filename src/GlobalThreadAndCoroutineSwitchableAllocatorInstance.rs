@@ -19,6 +19,10 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 {
 }
 
+unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Send for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+{
+}
+
 unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Sync for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
 }
