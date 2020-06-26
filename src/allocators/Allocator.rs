@@ -20,13 +20,13 @@ pub trait Allocator: Sized + Debug
 	///
 	/// `non_zero_new_size` will always be greater than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>;
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>;
 
 	/// Reallocate memory by shrinking it.
 	///
 	/// `non_zero_new_size` will always be less than `non_zero_current_size`.
 	/// `non_zero_power_of_two_alignment` will be the same value as passed to `allocate()`.
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>;
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>;
 
 	/// Adapts to a `GlobalAlloc` and `Alloc`.
 	#[inline(always)]
@@ -46,17 +46,15 @@ pub trait Allocator: Sized + Debug
 	#[inline(always)]
 	fn allocate_zeroed(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let zero_size = layout.size_;
+		let zero_size = layout.size();
 
 		if unlikely!(zero_size == 0)
 		{
 			return Ok((Self::ZeroSizedAllocation, 0))
 		}
 
-		let non_zero_size = layout.size_.non_zero();
-		let (memory_address, actual_size) = self.allocate(non_zero_size, layout.align_)?;
+		let non_zero_size = layout.size().non_zero();
+		let (memory_address, actual_size) = self.allocate(non_zero_size, layout.align().non_zero())?;
 
 		unsafe { memory_address.as_ptr().write_bytes(0x00, actual_size) };
 		Ok((memory_address, actual_size))
@@ -66,17 +64,17 @@ pub trait Allocator: Sized + Debug
 	#[inline(always)]
 	fn reallocate(&self, current_memory: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let current_size = layout.size_;
+		let current_size = layout.size();
 
 		if unlikely!(current_size == new_size)
 		{
 			return Ok((current_memory, new_size))
 		}
 
-		let non_zero_power_of_two_alignment = layout.align_;
+		let non_zero_power_of_two_alignment = layout.align().non_zero();
 
+		const MemoryCanBeMoved: bool = false;
+		
 		if likely!(new_size > current_size)
 		{
 			let non_zero_new_size = new_size.non_zero();
@@ -87,7 +85,7 @@ pub trait Allocator: Sized + Debug
 			}
 
 			let non_zero_current_size = current_size.non_zero();
-			self.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+			self.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, MemoryCanBeMoved)
 		}
 		else
 		{
@@ -100,7 +98,7 @@ pub trait Allocator: Sized + Debug
 			}
 
 			let non_zero_new_size = new_size.non_zero();
-			self.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+			self.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, MemoryCanBeMoved)
 		}
 	}
 
@@ -108,9 +106,7 @@ pub trait Allocator: Sized + Debug
 	#[inline(always)]
 	unsafe fn GlobalAlloc_alloc(&self, layout: Layout) -> *mut u8
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let zero_size = layout.size_;
+		let zero_size = layout.size();
 
 		if unlikely!(zero_size == 0)
 		{
@@ -118,7 +114,7 @@ pub trait Allocator: Sized + Debug
 		}
 
 		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
-		match self.allocate(non_zero_size, layout.align_)
+		match self.allocate(non_zero_size, layout.align().non_zero())
 		{
 			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
 			Err(_) => null_mut(),
@@ -147,15 +143,13 @@ pub trait Allocator: Sized + Debug
 			return
 		}
 
-		let layout = LayoutHack::access_private_fields(layout);
-
-		let zero_size = layout.size_;
-		debug_assert_ne!(zero_size, 0, "It should not be possible for a `layout.size_` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
+		let zero_size = layout.size();
+		debug_assert_ne!(zero_size, 0, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
 		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
 
 		let current_memory = NonNull::new_unchecked(ptr);
 
-		self.deallocate(non_zero_size,layout.align_, current_memory)
+		self.deallocate(non_zero_size,layout.align().non_zero(), current_memory)
 	}
 
 	#[doc(hidden)]
@@ -173,24 +167,32 @@ pub trait Allocator: Sized + Debug
 
 	#[doc(hidden)]
 	#[inline(always)]
-	fn AllocRef_alloc(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn AllocRef_alloc(&mut self, layout: Layout, init: AllocInit)-> Result<MemoryBlock, AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		if unlikely!(layout.size_ == 0)
+		let size = layout.size();
+		if unlikely!(size == 0)
 		{
-			return Ok((Self::ZeroSizedAllocation, 0))
+			return Ok(MemoryBlock { ptr: Self::ZeroSizedAllocation, size: 0})
 		}
-		let non_zero_size = unsafe { NonZeroUsize::new_unchecked(layout.size_) };
-		self.allocate(non_zero_size, layout.align_)
+		let non_zero_size = unsafe { NonZeroUsize::new_unchecked(size) };
+		
+		let (ptr, size) = self.allocate(non_zero_size, layout.align().non_zero())?;
+		
+		if init == AllocInit::Zeroed
+		{
+			unsafe { ptr.as_ptr().write_bytes(0x00, size) };
+		}
+		
+		Ok
+		(
+			MemoryBlock
+			{
+				ptr,
+				size,
+			}
+		)
 	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	fn AllocRef_alloc_zeroed(&self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
-	{
-		self.allocate_zeroed(layout)
-	}
-
+	
 	#[doc(hidden)]
 	#[inline(always)]
 	unsafe fn AllocRef_dealloc(&self, ptr: NonNull<u8>, layout: Layout)
@@ -199,68 +201,110 @@ pub trait Allocator: Sized + Debug
 		{
 			return
 		}
-
-		let layout = LayoutHack::access_private_fields(layout);
-		debug_assert_ne!(layout.size_, 0, "It should not be possible for a `layout.size_` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
-
-		let non_zero_size = NonZeroUsize::new_unchecked(layout.size_);
-		self.deallocate(non_zero_size, layout.align_, ptr)
+	
+		debug_assert_ne!(layout.size(), 0, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
+	
+		let non_zero_size = NonZeroUsize::new_unchecked(layout.size());
+		self.deallocate(non_zero_size, layout.align().non_zero(), ptr)
 	}
-
+	
+	
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn AllocRef_realloc(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn AllocRef_grow(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement, init: AllocInit) -> Result<MemoryBlock, AllocErr>
 	{
-		self.reallocate(ptr, layout, new_size)
-	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn AllocRef_realloc_zeroed(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
-	{
-		let (memory_address, actual_size) = self.reallocate(ptr, layout, new_size)?;
-
-		let layout = LayoutHack::access_private_fields(layout);
-		let old_size = layout.size_;
-		if actual_size > old_size
+		let current_memory = ptr;
+		
+		let current_size = layout.size();
+		debug_assert!(current_size <= new_size);
+		
+		if unlikely!(current_size == 0)
 		{
-			memory_address.as_ptr().add(old_size).write_bytes(0x00, actual_size - old_size);
+			debug_assert_eq!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was not the sentinel `Allocator::ZeroSizedAllocation`");
+			return self.AllocRef_alloc(layout, init)
 		}
-		Ok((memory_address, actual_size))
-	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn AllocRef_grow_in_place(&self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
-	{
-		let layout = LayoutHack::access_private_fields(layout);
-		let size_ = layout.size_;
-		debug_assert!(new_size >= size_, "new_size `{}` is less than layout.size_ `{}`", new_size, size_);
-		Err(CannotReallocInPlace)
-	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn AllocRef_grow_in_place_zeroed(&self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
-	{
-		let actual_size = self.AllocRef_grow_in_place(ptr, layout, new_size)?;
-
-		let layout = LayoutHack::access_private_fields(layout);
-		let old_size = layout.size_;
-		if actual_size > old_size
+		debug_assert_ne!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
+		
+		if unlikely!(current_size == new_size)
 		{
-			ptr.as_ptr().add(old_size).write_bytes(0x00, actual_size - old_size);
+			return Ok
+			(
+				MemoryBlock
+				{
+					ptr: current_memory,
+					size: current_size,
+				}
+			)
 		}
-		Ok(actual_size)
+		
+		let non_zero_current_size = current_size.non_zero();
+		let non_zero_new_size = new_size.non_zero();
+		let non_zero_power_of_two_alignment = layout.align().non_zero();
+		let (ptr, size) = self.growing_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, placement == ReallocPlacement::InPlace)?;
+		
+		if init == AllocInit::Zeroed
+		{
+			unsafe { ptr.as_ptr().add(current_size).write_bytes(0x00, new_size - current_size) };
+		}
+		
+		Ok
+		(
+			MemoryBlock
+			{
+				ptr,
+				size,
+			}
+		)
 	}
-
+	
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn AllocRef_shrink_in_place(&self, _ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
+	fn AllocRef_shrink(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement) -> Result<MemoryBlock, AllocErr>
 	{
-		let layout = LayoutHack::access_private_fields(layout);
-		let size_ = layout.size_;
-		debug_assert!(new_size <= size_, "layout.size_ `{}` is less than new_size `{}`", size_, new_size);
-		Err(CannotReallocInPlace)
+		let current_memory = ptr;
+		
+		let current_size = layout.size();
+		debug_assert!(new_size >= current_size);
+		
+		if cfg!(debug_asertions)
+		{
+			if unlikely!(current_size == 0)
+			{
+				debug_assert_eq!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was not the sentinel `Allocator::ZeroSizedAllocation`");
+			}
+			else
+			{
+				debug_assert_ne!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
+			}
+		}
+		
+		if unlikely!(current_size == new_size)
+		{
+			return Ok
+			(
+				MemoryBlock
+				{
+					ptr: current_memory,
+					size: current_size,
+				}
+			)
+		}
+		
+		let non_zero_current_size = current_size.non_zero();
+		let non_zero_new_size = new_size.non_zero();
+		let non_zero_power_of_two_alignment = layout.align().non_zero();
+		
+		match self.shrinking_reallocate(non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, placement == ReallocPlacement::InPlace)
+		{
+			Ok((ptr, size)) => Ok
+			(
+				MemoryBlock
+				{
+					ptr,
+					size,
+				}
+			),
+			Err(alloc_err) => Err(alloc_err),
+		}
 	}
 }

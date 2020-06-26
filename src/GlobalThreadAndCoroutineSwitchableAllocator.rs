@@ -5,7 +5,7 @@
 /// A trait that all such allocators implement.
 ///
 /// Create a new instance using `GlobalThreadAndCoroutineSwitchableAllocatorInstance`.
-pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + AllocRef + Allocator + Debug
+pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + Allocator + Debug + AllocRef
 {
 	/// Type of the coroutine local allocator.
 	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>;

@@ -87,15 +87,15 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		choose_allocator!(self, current_memory, growing_reallocate, non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+		choose_allocator!(self, current_memory, growing_reallocate, non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, current_memory_can_not_be_moved)
 	}
 
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		choose_allocator!(self, current_memory, growing_reallocate, non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory)
+		choose_allocator!(self, current_memory, growing_reallocate, non_zero_new_size, non_zero_power_of_two_alignment, non_zero_current_size, current_memory, current_memory_can_not_be_moved)
 	}
 }
 
@@ -157,7 +157,7 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 	}
 }
 
-impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>> GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, AllocRefToAllocatorAdaptor<System>>
+impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>> GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocToAllocatorAdaptor<System>>
 {
 	/// New instance, intended to only be used once to construct a static global allocator field.
 	///
@@ -187,6 +187,6 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 	#[inline(always)]
 	pub const fn system(per_thread_state: fn() -> NonNull<PerThreadState<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator>>) -> Self
 	{
-		Self::new(AllocRefToAllocatorAdaptor::System, per_thread_state)
+		Self::new(GlobalAllocToAllocatorAdaptor::System, per_thread_state)
 	}
 }

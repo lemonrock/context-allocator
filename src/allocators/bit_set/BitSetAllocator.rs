@@ -101,7 +101,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
 		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
@@ -114,7 +114,12 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 		{
 			return Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
 		}
-
+		
+		if unlikely!(current_memory_can_not_be_moved)
+		{
+			return Err(AllocErr)
+		}
+		
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
 		self.start_search_for_next_allocation_at.set
 		({
@@ -134,9 +139,10 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 		}
 		Ok((allocated, actual_size))
 	}
-
+	
+	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
 		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);

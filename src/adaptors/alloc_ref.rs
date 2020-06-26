@@ -9,51 +9,27 @@ macro_rules! alloc_ref
 	() =>
 	{
 		#[inline(always)]
-		fn alloc(&mut self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
+		fn alloc(&mut self, layout: Layout, init: AllocInit)-> Result<MemoryBlock, AllocErr>
 		{
-			self.AllocRef_alloc(layout)
+			self.AllocRef_alloc(layout, init)
 		}
-
-		#[inline(always)]
-		fn alloc_zeroed(&mut self, layout: Layout) -> Result<(NonNull<u8>, usize), AllocErr>
-		{
-			self.AllocRef_alloc_zeroed(layout)
-		}
-
+		
 		#[inline(always)]
 		unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout)
 		{
 			self.AllocRef_dealloc(ptr, layout)
 		}
-
+		
 		#[inline(always)]
-		unsafe fn realloc(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
+		unsafe fn grow(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement, init: AllocInit) -> Result<MemoryBlock, AllocErr>
 		{
-			self.AllocRef_realloc(ptr, layout, new_size)
+			self.AllocRef_grow(ptr, layout, new_size, placement, init)
 		}
 
 		#[inline(always)]
-		unsafe fn realloc_zeroed(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<(NonNull<u8>, usize), AllocErr>
+		unsafe fn shrink(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement) -> Result<MemoryBlock, AllocErr>
 		{
-			self.AllocRef_realloc_zeroed(ptr, layout, new_size)
-		}
-
-		#[inline(always)]
-		unsafe fn grow_in_place(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
-		{
-			self.AllocRef_grow_in_place(ptr, layout, new_size)
-		}
-
-		#[inline(always)]
-		unsafe fn grow_in_place_zeroed(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
-		{
-			self.AllocRef_grow_in_place_zeroed(ptr, layout, new_size)
-		}
-
-		#[inline(always)]
-		unsafe fn shrink_in_place(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize) -> Result<usize, CannotReallocInPlace>
-		{
-			self.AllocRef_shrink_in_place(ptr, layout, new_size)
+			self.AllocRef_shrink(ptr, layout, new_size, placement)
 		}
 	}
 }

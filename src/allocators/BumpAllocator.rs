@@ -78,7 +78,7 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
 		{
@@ -90,6 +90,11 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 		}
 		else
 		{
+			if unlikely!(current_memory_can_not_be_moved)
+			{
+				return Err(AllocErr)
+			}
+			
 			let (new_memory, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
 			let current_size = non_zero_current_size.get();
 			unsafe { new_memory.as_ptr().copy_from(current_memory.as_ptr(), current_size) };
@@ -97,16 +102,17 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 		}
 	}
 
+	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
-		let size = non_zero_new_size.get();
+		let new_size = non_zero_new_size.get();
 		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
 		{
-			self.next_allocation_at_pointer.set(current_memory.add(size))
+			self.next_allocation_at_pointer.set(current_memory.add(new_size))
 		}
 
-		Ok((current_memory, size))
+		Ok((current_memory, new_size))
 	}
 }
 

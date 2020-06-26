@@ -154,7 +154,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		debug_assert!(non_zero_new_size > non_zero_current_size, "non_zero_new_size `{}` should be greater than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
@@ -170,6 +170,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 		// (2) For a simple doubling, it can be more efficient to try to coalesce two blocks.
 		//
 		// This technique could work for other approaches, eg quadrupling, but it becomes a lot more complex - and the gain over an efficient memory copy is probably lost.
+		// However, quadrupling does allow for broader `current_memory_can_not_be_moved` support to reallocate-in-place.
 		if new_block_size == old_block_size.doubled()
 		{
 			let binary_search_tree = self.binary_search_tree_for_block_size(old_block_size);
@@ -182,16 +183,22 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 				return Ok((current_memory, new_block_size.get()))
 			}
 		}
-
+		
+		if unlikely!(current_memory_can_not_be_moved)
+		{
+			return Err(AllocErr)
+		}
+		
 		// (3) Allocate a new block and copy over data.
 		let (block_to_copy_into, new_block_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
 		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), non_zero_current_size.get()) };
 		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
 		Ok((block_to_copy_into, new_block_size))
 	}
-
+	
+	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
 	{
 		debug_assert!(non_zero_new_size < non_zero_current_size, "non_zero_new_size `{}` should be less than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
 
