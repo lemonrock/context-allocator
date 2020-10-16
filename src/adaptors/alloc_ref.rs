@@ -9,27 +9,27 @@ macro_rules! alloc_ref
 	() =>
 	{
 		#[inline(always)]
-		fn alloc(&mut self, layout: Layout, init: AllocInit)-> Result<MemoryBlock, AllocErr>
+		fn alloc(&self, layout: Layout)-> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_alloc(layout, init)
+			self.AllocRef_alloc(layout)
 		}
 		
 		#[inline(always)]
-		unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout)
+		unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout)
 		{
 			self.AllocRef_dealloc(ptr, layout)
 		}
 		
 		#[inline(always)]
-		unsafe fn grow(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement, init: AllocInit) -> Result<MemoryBlock, AllocErr>
+		unsafe fn grow(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_grow(ptr, layout, new_size, placement, init)
+			self.AllocRef_grow(ptr, old_layout, new_layout)
 		}
 
 		#[inline(always)]
-		unsafe fn shrink(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement) -> Result<MemoryBlock, AllocErr>
+		unsafe fn shrink(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_shrink(ptr, layout, new_size, placement)
+			self.AllocRef_shrink(ptr, old_layout, new_layout)
 		}
 	}
 }

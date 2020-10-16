@@ -37,14 +37,14 @@ macro_rules! allocation_ends_at_pointer
 				let pointer: *mut u8 = unsafe { transmute($allocation_from.checked_add(size)) };
 				if unlikely!(pointer.is_null())
 				{
-					return Err(AllocErr)
+					return Err(AllocError)
 				}
 				unsafe { transmute(pointer) }
 			};
 
 			if unlikely!(allocation_ends_at_pointer > $self.ends_at_pointer)
 			{
-				return Err(AllocErr)
+				return Err(AllocError)
 			}
 
 			allocation_ends_at_pointer
@@ -55,7 +55,7 @@ macro_rules! allocation_ends_at_pointer
 impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>
 	{
 		debug_assert!(non_zero_power_of_two_alignment <= Self::MaximumPowerOfTwoAlignment, "non_zero_power_of_two_alignment `{}` exceeds `{}`", non_zero_power_of_two_alignment, Self::MaximumPowerOfTwoAlignment);
 
@@ -78,9 +78,11 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
+		debug_assert!(non_zero_power_of_two_new_alignment <= Self::MaximumPowerOfTwoAlignment, "non_zero_power_of_two_new_alignment `{}` exceeds `{}`", non_zero_power_of_two_new_alignment, Self::MaximumPowerOfTwoAlignment);
+		
+		if unlikely!(self.fits_at_current_location(non_zero_power_of_two_new_alignment, current_memory))
 		{
 			let last = self.most_recent_allocation_pointer.get();
 			self.next_allocation_at_pointer.set(allocation_ends_at_pointer!(self, non_zero_new_size, current_memory));
@@ -90,29 +92,29 @@ impl<MS: MemorySource> Allocator for BumpAllocator<MS>
 		}
 		else
 		{
-			if unlikely!(current_memory_can_not_be_moved)
-			{
-				return Err(AllocErr)
-			}
-			
-			let (new_memory, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
-			let current_size = non_zero_current_size.get();
-			unsafe { new_memory.as_ptr().copy_from(current_memory.as_ptr(), current_size) };
-			Ok((new_memory, actual_size))
+			self.allocate_and_copy(non_zero_new_size, non_zero_power_of_two_new_alignment, non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory, current_memory_can_not_be_moved, non_zero_current_size.get())
 		}
 	}
 
-	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, _non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
+		debug_assert!(non_zero_power_of_two_new_alignment <= Self::MaximumPowerOfTwoAlignment, "non_zero_power_of_two_new_alignment `{}` exceeds `{}`", non_zero_power_of_two_new_alignment, Self::MaximumPowerOfTwoAlignment);
+		
 		let new_size = non_zero_new_size.get();
-		if unlikely!(current_memory == self.most_recent_allocation_pointer.get())
+		if unlikely!(self.fits_at_current_location(non_zero_power_of_two_new_alignment, current_memory))
 		{
-			self.next_allocation_at_pointer.set(current_memory.add(new_size))
+			self.next_allocation_at_pointer.set(current_memory.add(new_size));
+			Ok((current_memory, new_size))
 		}
-
-		Ok((current_memory, new_size))
+		else if likely!(Self::new_alignment_can_be_accommodated(non_zero_power_of_two_new_alignment, current_memory))
+		{
+			Ok((current_memory, new_size))
+		}
+		else
+		{
+			self.allocate_and_copy(non_zero_new_size, non_zero_power_of_two_new_alignment, non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory, current_memory_can_not_be_moved, non_zero_new_size.get())
+		}
 	}
 }
 
@@ -155,5 +157,31 @@ impl<MS: MemorySource> BumpAllocator<MS>
 	fn allocations_start_from(&self) -> MemoryAddress
 	{
 		self.ends_at_pointer.subtract_non_zero(self.memory_source.size())
+	}
+	
+	#[inline(always)]
+	fn fits_at_current_location(&self, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>) -> bool
+	{
+		current_memory == self.most_recent_allocation_pointer.get() && Self::new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment, current_memory)
+	}
+	
+	#[inline(always)]
+	fn new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>) -> bool
+	{
+		current_memory.is_aligned_to(non_zero_power_of_two_current_alignment)
+	}
+	
+	#[inline(always)]
+	fn allocate_and_copy(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool, amount_to_copy: usize) -> Result<(NonNull<u8>, usize), AllocError>
+	{
+		if unlikely!(current_memory_can_not_be_moved)
+		{
+			return Err(AllocError)
+		}
+		
+		let (new_memory, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_new_alignment)?;
+		unsafe { new_memory.as_ptr().copy_from(current_memory.as_ptr(), amount_to_copy) };
+		self.deallocate(non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory);
+		Ok((new_memory, actual_size))
 	}
 }

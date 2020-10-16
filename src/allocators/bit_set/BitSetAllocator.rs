@@ -21,7 +21,7 @@ pub struct BitSetAllocator<MS: MemorySource>
 impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>
 	{
 		let number_of_bits_required = self.number_of_bits_required(non_zero_size);
 
@@ -36,7 +36,7 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 			let alignment_exceeds_that_which_can_be_accommodated_in_one_bit_set_word = power_of_two_exponent > BitSetWord::SizeInBits;
 			if unlikely!(alignment_exceeds_that_which_can_be_accommodated_in_one_bit_set_word)
 			{
-				return Err(AllocErr)
+				return Err(AllocError)
 			}
 
 			power_of_two_exponent
@@ -101,32 +101,35 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
-		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
-
-		let current_memory_offset_in_bytes = current_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
-		let new_memory_offset_in_bytes = new_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
-
-		let reallocate_size = new_memory_offset_in_bytes - current_memory_offset_in_bytes;
-		if unlikely!(reallocate_size.is_zero())
+		if Self::new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment, current_memory)
 		{
-			return Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
+			let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
+			let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
+			
+			let current_memory_offset_in_bytes = current_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
+			let new_memory_offset_in_bytes = new_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
+			
+			let reallocate_size = new_memory_offset_in_bytes - current_memory_offset_in_bytes;
+			if unlikely!(reallocate_size.is_zero())
+			{
+				return Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
+			}
 		}
 		
 		if unlikely!(current_memory_can_not_be_moved)
 		{
-			return Err(AllocErr)
+			return Err(AllocError)
 		}
 		
-		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
+		self.deallocate(non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory);
 		self.start_search_for_next_allocation_at.set
 		({
 			let location = self.absolute_location_in_bit_set(current_memory);
 			location.major
 		});
-		let (allocated, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
+		let (allocated, actual_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_new_alignment)?;
 
 		if likely!(allocated != current_memory)
 		{
@@ -140,23 +143,37 @@ impl<MS: MemorySource> Allocator for BitSetAllocator<MS>
 		Ok((allocated, actual_size))
 	}
 	
-	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
-		let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
-
-		let current_memory_offset_in_bytes = current_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
-		let new_memory_offset_in_bytes = new_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
-
-		let deallocate_size = current_memory_offset_in_bytes - new_memory_offset_in_bytes;
-		if likely!(deallocate_size.is_not_zero())
+		if Self::new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment, current_memory)
 		{
-			let end_of_new_memory = current_memory.add(new_memory_offset_in_bytes.to_usize());
-			self.deallocate(deallocate_size.to_non_zero(), non_zero_power_of_two_alignment, end_of_new_memory)
+			let current_number_of_bits_required = self.number_of_bits_required(non_zero_current_size);
+			let new_number_of_bits_required = self.number_of_bits_required(non_zero_new_size);
+			
+			let current_memory_offset_in_bytes = current_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
+			let new_memory_offset_in_bytes = new_number_of_bits_required.scale_to_memory_offset_in_bytes(&self.block_size);
+			
+			let deallocate_size = current_memory_offset_in_bytes - new_memory_offset_in_bytes;
+			if likely!(deallocate_size.is_not_zero())
+			{
+				let end_of_new_memory = current_memory.add(new_memory_offset_in_bytes.to_usize());
+				self.deallocate(deallocate_size.to_non_zero(), non_zero_power_of_two_current_alignment, end_of_new_memory)
+			}
+			
+			return Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
 		}
-		Ok((current_memory, new_memory_offset_in_bytes.to_usize()))
+		
+		if unlikely!(current_memory_can_not_be_moved)
+		{
+			return Err(AllocError)
+		}
+		
+		let (new_memory, new_size): (NonNull<u8>, usize) = self.allocate(non_zero_new_size, non_zero_power_of_two_new_alignment)?;
+		unsafe { new_memory.as_ptr().copy_from_nonoverlapping(current_memory.as_ptr(), non_zero_new_size.get()) };
+		self.deallocate(non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory);
+		
+		Ok((new_memory, new_size))
 	}
 }
 
@@ -258,7 +275,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn try_to_set_number_of_bits(&self, number_of_bits_required: NumberOfBits, power_of_two_exponent: usize) -> Result<(MemoryAddress, usize), AllocErr>
+	fn try_to_set_number_of_bits(&self, number_of_bits_required: NumberOfBits, power_of_two_exponent: usize) -> Result<(MemoryAddress, usize), AllocError>
 	{
 		debug_assert!(number_of_bits_required.is_not_zero());
 
@@ -310,7 +327,7 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 		let end_bit_set_word_pointer = self.start_search_for_next_allocation_at.replace(self.inclusive_start_of_bit_set);
 		scan!(self, number_of_bits_required, power_of_two_exponent, end_bit_set_word_pointer, callback);
 
-		Err(AllocErr)
+		Err(AllocError)
 	}
 
 	#[inline(always)]
@@ -469,5 +486,11 @@ impl<MS: MemorySource> BitSetAllocator<MS>
 	{
 		let unaligned_trailing_unset_bits = current.trailing_unset_bits();
 		unaligned_trailing_unset_bits >> power_of_two_exponent
+	}
+	
+	#[inline(always)]
+	fn new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>) -> bool
+	{
+		current_memory.is_aligned_to(non_zero_power_of_two_current_alignment)
 	}
 }

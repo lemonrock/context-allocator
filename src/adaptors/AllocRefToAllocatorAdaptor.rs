@@ -27,47 +27,27 @@ impl<A: AllocRef> Deref for AllocRefToAllocatorAdaptor<A>
 impl<A: AllocRef> Allocator for AllocRefToAllocatorAdaptor<A>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		self.mutable_reference().alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment), AllocInit::Uninitialized).map(|memory_block| (memory_block.ptr, memory_block.size))
+		Self::map_non_null_slice(self.reference().alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment)))
 	}
 
 	#[inline(always)]
 	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
-		unsafe { self.mutable_reference().dealloc(current_memory, Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
+		unsafe { self.reference().dealloc(current_memory, Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
 	}
 
-	// 	unsafe fn grow(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement, init: AllocInit) -> Result<MemoryBlock, AllocErr>
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		use self::ReallocPlacement::*;
-		let placement = if unlikely!(current_memory_can_not_be_moved)
-		{
-			InPlace
-		}
-		else
-		{
-			MayMove
-		};
-		(unsafe { self.mutable_reference().grow(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get(), placement, AllocInit::Uninitialized) }).map(|memory_block| (memory_block.ptr, memory_block.size))
+		Self::map_non_null_slice(unsafe { self.reference().grow(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_current_alignment), Self::layout(non_zero_new_size, non_zero_power_of_two_new_alignment)) })
 	}
 	
-	// 	unsafe fn shrink(&mut self, ptr: NonNull<u8>, layout: Layout, new_size: usize, placement: ReallocPlacement) -> Result<MemoryBlock, AllocErr>
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		use self::ReallocPlacement::*;
-		let placement = if unlikely!(current_memory_can_not_be_moved)
-		{
-			InPlace
-		}
-		else
-		{
-			MayMove
-		};
-		(unsafe { self.mutable_reference().shrink(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_alignment), non_zero_new_size.get(), placement) }).map(|memory_block| (memory_block.ptr, memory_block.size))
+		Self::map_non_null_slice(unsafe { self.reference().shrink(current_memory, Self::layout(non_zero_current_size, non_zero_power_of_two_current_alignment), Self::layout(non_zero_new_size, non_zero_power_of_two_new_alignment)) })
 	}
 }
 
@@ -81,15 +61,21 @@ impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 	}
 	
 	#[inline(always)]
-	fn mutable_reference(&self) -> &mut A
+	fn reference(&self) -> &A
 	{
-		self.0.get().mutable_reference()
+		self.0.get().reference()
 	}
 
 	#[inline(always)]
 	fn layout(non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Layout
 	{
 		unsafe { Layout::from_size_align_unchecked(non_zero_size.get(), non_zero_power_of_two_alignment.get()) }
+	}
+	
+	#[inline(always)]
+	fn map_non_null_slice(result: Result<NonNull<[u8]>, AllocError>) -> Result<(NonNull<u8>, usize), AllocError>
+	{
+		result.map(|non_null_slice| (non_null_slice.as_non_null_ptr(), non_null_slice.len()))
 	}
 }
 

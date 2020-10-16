@@ -34,7 +34,7 @@ impl<MS: MemorySource> Debug for MultipleBinarySearchTreeAllocator<MS>
 impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 {
 	#[inline(always)]
-	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>
 	{
 		macro_rules! try_to_allocate_exact_size_block
 		{
@@ -109,12 +109,12 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 
 		if unlikely!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::size_exceeds_maximum_allocation_size(non_zero_size))
 		{
-			return Err(AllocErr)
+			return Err(AllocError)
 		}
 
 		if unlikely!(BinarySearchTreesWithCachedKnowledgeOfFirstChild::alignment_exceeds_maximum_alignment(non_zero_power_of_two_alignment))
 		{
-			return Err(AllocErr)
+			return Err(AllocError)
 		}
 
 		// (1) Try to satisfy allocation from a binary search tree of blocks of the same size.
@@ -133,7 +133,7 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 			try_to_satisfy_allocation!(try_to_allocate_larger_sized_block, binary_search_tree_index_of_larger_size_block, floored_non_zero_power_of_two_alignment, block_size, exact_block_size, self);
 		}
 
-		Err(AllocErr)
+		Err(AllocError)
 	}
 
 	#[inline(always)]
@@ -154,60 +154,61 @@ impl<MS: MemorySource> Allocator for MultipleBinarySearchTreeAllocator<MS>
 	}
 
 	#[inline(always)]
-	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn growing_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
 		debug_assert!(non_zero_new_size > non_zero_current_size, "non_zero_new_size `{}` should be greater than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
-
-		let old_block_size = Self::block_size(non_zero_current_size);
-		let new_block_size = Self::block_size(non_zero_new_size);
-
-		// (1) Satisfy from within existing block.
-		if new_block_size == old_block_size
+		
+		if Self::new_alignment_can_be_accommodated(non_zero_power_of_two_new_alignment, current_memory)
 		{
-			return Ok((current_memory, new_block_size.get()))
-		}
-
-		// (2) For a simple doubling, it can be more efficient to try to coalesce two blocks.
-		//
-		// This technique could work for other approaches, eg quadrupling, but it becomes a lot more complex - and the gain over an efficient memory copy is probably lost.
-		// However, quadrupling does allow for broader `current_memory_can_not_be_moved` support to reallocate-in-place.
-		if new_block_size == old_block_size.doubled()
-		{
-			let binary_search_tree = self.binary_search_tree_for_block_size(old_block_size);
-			let contiguous_block_node_pointer = binary_search_tree.find(current_memory.add_non_zero(old_block_size));
-			if contiguous_block_node_pointer.is_not_null()
+			let old_block_size = Self::block_size(non_zero_current_size);
+			let new_block_size = Self::block_size(non_zero_new_size);
+			
+			// (1) Satisfy from within existing block.
+			if new_block_size == old_block_size
 			{
-				let is_first_child = contiguous_block_node_pointer == binary_search_tree.cached_first_child();
-				binary_search_tree.remove(contiguous_block_node_pointer, is_first_child);
-
 				return Ok((current_memory, new_block_size.get()))
+			}
+			
+			// (2) For a simple doubling, it can be more efficient to try to coalesce two blocks.
+			//
+			// This technique could work for other approaches, eg quadrupling, but it becomes a lot more complex - and the gain over an efficient memory copy is probably lost.
+			// However, quadrupling does allow for broader `current_memory_can_not_be_moved` support to reallocate-in-place.
+			if new_block_size == old_block_size.doubled()
+			{
+				let binary_search_tree = self.binary_search_tree_for_block_size(old_block_size);
+				let contiguous_block_node_pointer = binary_search_tree.find(current_memory.add_non_zero(old_block_size));
+				if contiguous_block_node_pointer.is_not_null()
+				{
+					let is_first_child = contiguous_block_node_pointer == binary_search_tree.cached_first_child();
+					binary_search_tree.remove(contiguous_block_node_pointer, is_first_child);
+					
+					return Ok((current_memory, new_block_size.get()))
+				}
 			}
 		}
 		
-		if unlikely!(current_memory_can_not_be_moved)
-		{
-			return Err(AllocErr)
-		}
-		
 		// (3) Allocate a new block and copy over data.
-		let (block_to_copy_into, new_block_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_alignment)?;
-		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), non_zero_current_size.get()) };
-		self.deallocate(non_zero_current_size, non_zero_power_of_two_alignment, current_memory);
-		Ok((block_to_copy_into, new_block_size))
+		self.allocate_and_copy(non_zero_new_size, non_zero_power_of_two_new_alignment, non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory, current_memory_can_not_be_moved, non_zero_current_size.get())
 	}
 	
-	/// Memory is never moved hence `_current_memory_can_not_be_moved` is ignored.
 	#[inline(always)]
-	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, _non_zero_power_of_two_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, current_memory: NonNull<u8>, _current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocErr>
+	fn shrinking_reallocate(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool) -> Result<(NonNull<u8>, usize), AllocError>
 	{
 		debug_assert!(non_zero_new_size < non_zero_current_size, "non_zero_new_size `{}` should be less than non_zero_current_size `{}`", non_zero_new_size, non_zero_current_size);
-
-		let old_block_size = Self::block_size(non_zero_current_size);
-		let new_block_size = Self::block_size(non_zero_new_size);
-
-		self.split_up_block(current_memory.add_non_zero(new_block_size), current_memory.add_non_zero(old_block_size));
-
-		Ok((current_memory, new_block_size.get()))
+		
+		if Self::new_alignment_can_be_accommodated(non_zero_power_of_two_new_alignment, current_memory)
+		{
+			let old_block_size = Self::block_size(non_zero_current_size);
+			let new_block_size = Self::block_size(non_zero_new_size);
+			
+			self.split_up_block(current_memory.add_non_zero(new_block_size), current_memory.add_non_zero(old_block_size));
+			
+			Ok((current_memory, new_block_size.get()))
+		}
+		else
+		{
+			self.allocate_and_copy(non_zero_new_size, non_zero_power_of_two_new_alignment, non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory, current_memory_can_not_be_moved, non_zero_new_size.get())
+		}
 	}
 }
 
@@ -359,6 +360,26 @@ impl<MS: MemorySource> MultipleBinarySearchTreeAllocator<MS>
 	{
 		self.inner.binary_search_tree_for(binary_search_tree_index)
 	}
+	
+	#[inline(always)]
+	fn new_alignment_can_be_accommodated(non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>) -> bool
+	{
+		current_memory.is_aligned_to(non_zero_power_of_two_current_alignment)
+	}
+	
+	#[inline(always)]
+	fn allocate_and_copy(&self, non_zero_new_size: NonZeroUsize, non_zero_power_of_two_new_alignment: NonZeroUsize, non_zero_current_size: NonZeroUsize, non_zero_power_of_two_current_alignment: NonZeroUsize, current_memory: NonNull<u8>, current_memory_can_not_be_moved: bool, amount_to_copy: usize) -> Result<(NonNull<u8>, usize), AllocError>
+	{
+		if unlikely!(current_memory_can_not_be_moved)
+		{
+			return Err(AllocError)
+		}
+		
+		let (block_to_copy_into, new_block_size) = self.allocate(non_zero_new_size, non_zero_power_of_two_new_alignment)?;
+		unsafe { current_memory.as_ptr().copy_to_nonoverlapping(block_to_copy_into.as_ptr(), amount_to_copy) };
+		self.deallocate(non_zero_current_size, non_zero_power_of_two_current_alignment, current_memory);
+		Ok((block_to_copy_into, new_block_size))
+	}
 }
 
 #[cfg(test)]
@@ -466,7 +487,7 @@ mod MultipleBinarySearchTreeAllocatorTests
 
 	fn assert_allocator_is_empty(allocator: &MultipleBinarySearchTreeAllocator<MemoryMapSource>)
 	{
-		assert_eq!(allocator.allocate(1.non_zero(), 1.non_zero()), Err(AllocErr), "Allocator was not empty");
+		assert_eq!(allocator.allocate(1.non_zero(), 1.non_zero()), Err(AllocError), "Allocator was not empty");
 	}
 
 	fn new_allocator<'a>(memory_size: usize) -> MultipleBinarySearchTreeAllocator<MemoryMapSource>

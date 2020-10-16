@@ -28,7 +28,7 @@ impl<MS: MemorySource> Drop for Arena<MS>
 impl<MS: MemorySource> MemorySource for Arena<MS>
 {
 	#[inline(always)]
-	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocErr>
+	fn obtain(&self, non_zero_size: NonZeroUsize) -> Result<MemoryAddress, AllocError>
 	{
 		debug_assert!(non_zero_size <= self.block_size);
 
@@ -36,7 +36,7 @@ impl<MS: MemorySource> MemorySource for Arena<MS>
 
 		if unlikely!(next_available_slot_index.is_fully_allocated())
 		{
-			return Err(AllocErr)
+			return Err(AllocError)
 		}
 
 		let unallocated_block = self.unallocated_block(next_available_slot_index);
@@ -61,7 +61,7 @@ impl<MS: MemorySource> Arena<MS>
 {
 	/// Create a new instance by memory size and block size.
 	#[inline(always)]
-	pub fn new_by_amount(memory_source: MS, block_size: NonZeroUsize, memory_source_size: NonZeroUsize, block_initializer: impl Fn(MemoryAddress, NonZeroUsize)) -> Result<Self, AllocErr>
+	pub fn new_by_amount(memory_source: MS, block_size: NonZeroUsize, memory_source_size: NonZeroUsize, block_initializer: impl Fn(MemoryAddress, NonZeroUsize)) -> Result<Self, AllocError>
 	{
 		let number_of_blocks = ((memory_source_size.get() + (block_size.get() - 1)) / block_size.get()).non_zero();
 
@@ -73,7 +73,7 @@ impl<MS: MemorySource> Arena<MS>
 	/// `block_size` must be at least 8 to be useful.
 	/// `block_initializer` takes the address of a block and the size of a block; after it is called, the block will have the first 8 bytes (4 bytes on 32-bit platforms) overwritten with a slot index pointer.
 	#[inline(always)]
-	pub fn new(memory_source: MS, block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, block_initializer: impl Fn(MemoryAddress, NonZeroUsize)) -> Result<Self, AllocErr>
+	pub fn new(memory_source: MS, block_size: NonZeroUsize, number_of_blocks: NonZeroUsize, block_initializer: impl Fn(MemoryAddress, NonZeroUsize)) -> Result<Self, AllocError>
 	{
 		let memory_source_size = block_size.multiply(number_of_blocks);
 

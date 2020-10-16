@@ -10,8 +10,12 @@
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
 #![feature(const_fn)]
+#![feature(const_fn_fn_ptr_basics)]
 #![feature(core_intrinsics)]
 #![feature(extern_types)]
+#![feature(nonnull_slice_from_raw_parts)]
+#![feature(slice_ptr_get)]
+#![feature(slice_ptr_len)]
 #![feature(thread_local)]
 
 
@@ -85,12 +89,9 @@ use linux_support::memory::huge_pages::DefaultPageSizeAndHugePageSizes;
 use linux_support::memory::mapping::*;
 use magic_ring_buffer::memory_sizes::MemorySize;
 use std::alloc::AllocRef;
-use std::alloc::AllocErr;
-use std::alloc::AllocInit;
+use std::alloc::AllocError;
 use std::alloc::Layout;
 use std::alloc::GlobalAlloc;
-use std::alloc::MemoryBlock;
-use std::alloc::ReallocPlacement;
 use std::alloc::System;
 use std::collections::Bound;
 use std::collections::Bound::*;
