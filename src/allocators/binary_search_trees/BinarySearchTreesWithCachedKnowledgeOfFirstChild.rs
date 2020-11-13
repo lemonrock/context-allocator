@@ -55,11 +55,11 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 
 	const LargestInclusiveBinarySearchTreeIndex: usize = Self::NumberOfBinarySearchTrees - 1;
 
-	const LargestInclusivePowerOfTwoExponent: NonZeroUsize = non_zero_usize(Self::binary_search_tree_index_to_power_of_two_exponent(Self::LargestInclusiveBinarySearchTreeIndex));
+	const LargestInclusivePowerOfTwoExponent: NonZeroUsize = new_non_zero_usize(Self::binary_search_tree_index_to_power_of_two_exponent(Self::LargestInclusiveBinarySearchTreeIndex));
 
-	pub(crate) const MinimumAllocationSize: NonZeroUsize = non_zero_usize(1 << Self::SmallestInclusivePowerOfTwoExponent.get());
+	pub(crate) const MinimumAllocationSize: NonZeroUsize = new_non_zero_usize(1 << Self::SmallestInclusivePowerOfTwoExponent.get());
 
-	pub(crate) const MaximumAllocationSize: NonZeroUsize = non_zero_usize(1 << Self::LargestInclusivePowerOfTwoExponent.get());
+	pub(crate) const MaximumAllocationSize: NonZeroUsize = new_non_zero_usize(1 << Self::LargestInclusivePowerOfTwoExponent.get());
 
 	pub(crate) const MinimumAlignment: NonZeroUsize = Self::MinimumAllocationSize;
 
@@ -68,7 +68,7 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	#[inline(always)]
 	const fn logarithm_base2(value: usize) -> NonZeroUsize
 	{
-		non_zero_usize(logarithm_base2_as_usize(value))
+		new_non_zero_usize(logarithm_base2_as_usize(value))
 	}
 
 	#[inline(always)]
@@ -135,8 +135,8 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	pub(crate) fn binary_search_tree_for(&self, binary_search_tree_index: usize) -> &mut BinarySearchTreeWithCachedKnowledgeOfFirstChild
 	{
 		debug_assert!(binary_search_tree_index < Self::NumberOfBinarySearchTrees, "binary_search_tree_index `{}` is too large", binary_search_tree_index);
-
-		unsafe { self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two.get_unchecked(binary_search_tree_index) }.get().mutable_reference()
+		
+		self.binary_search_trees_of_free_blocks_sorted_by_ascending_memory_address_and_indexed_by_power_of_two_exponent_less_smallest_power_of_two.get_unchecked_safe(binary_search_tree_index).get().mutable_reference()
 	}
 
 	#[inline(always)]

@@ -47,7 +47,7 @@ pub trait UsizeExt: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn non_zero(self) -> NonZeroUsize
 	{
-		NonZeroUsize::non_zero(self.to_usize())
+		new_non_zero_usize(self.to_usize())
 	}
 
 	#[doc(hidden)]

@@ -130,6 +130,10 @@ use std::ptr::NonNull;
 use std::ptr::null;
 use std::ptr::null_mut;
 use std::sync::Arc;
+use swiss_army_knife::get_unchecked::GetUnchecked;
+use swiss_army_knife::non_zero::new_non_null;
+use swiss_army_knife::non_zero::new_non_zero_u32;
+use swiss_army_knife::non_zero::new_non_zero_usize;
 
 
 /// Adapt various allocator traits to one another.

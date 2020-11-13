@@ -135,7 +135,7 @@ impl<MS: MemorySource> LocalAllocator<MS> for BumpAllocator<MS>
 
 impl<MS: MemorySource> BumpAllocator<MS>
 {
-	const MaximumPowerOfTwoAlignment: NonZeroUsize = non_zero_usize(4096);
+	const MaximumPowerOfTwoAlignment: NonZeroUsize = new_non_zero_usize(4096);
 
 	/// New instance wrapping a block of memory.
 	#[inline(always)]

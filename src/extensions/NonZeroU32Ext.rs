@@ -53,6 +53,6 @@ impl NonZeroU32Ext for NonZeroU32
 	#[inline(always)]
 	fn non_zero_unchecked(value: u32) -> Self
 	{
-		unsafe { NonZeroU32::new_unchecked(value) }
+		new_non_zero_u32(value)
 	}
 }

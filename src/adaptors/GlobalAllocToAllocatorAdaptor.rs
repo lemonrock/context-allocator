@@ -90,7 +90,7 @@ impl<GA: GlobalAlloc> GlobalAllocToAllocatorAdaptor<GA>
 		}
 		else
 		{
-			Ok((unsafe { NonNull::new_unchecked(pointer) }, non_zero_new_size.get()))
+			Ok((new_non_null(pointer), non_zero_new_size.get()))
 		}
 	}
 }

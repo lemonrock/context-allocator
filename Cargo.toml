@@ -28,3 +28,4 @@ libc = { version = "^0.2.69", features = ["const-extern-fn", "extra_traits", "st
 likely = { version = "^0.2.0", path = "../likely" }
 linux-support = { path = "../linux-support", version = "^0.0.2" }
 magic-ring-buffer = { version = "^0.2.0", path = "../magic-ring-buffer" }
+swiss-army-knife = { version = "^0.0.0", path = "../swiss-army-knife" }

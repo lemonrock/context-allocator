@@ -26,6 +26,6 @@ impl<CoroutineHeapSize: MemorySize> CoroutineHeapMemory<CoroutineHeapSize>
 	#[inline(always)]
 	pub const fn into_memory_source(&self) -> CoroutineHeapMemorySource<CoroutineHeapSize>
 	{
-		CoroutineHeapMemorySource(unsafe { NonNull::new_unchecked(self as *const CoroutineHeapMemory<CoroutineHeapSize> as *mut CoroutineHeapMemory<CoroutineHeapSize>) })
+		CoroutineHeapMemorySource(new_non_null(self as *const CoroutineHeapMemory<CoroutineHeapSize> as *mut CoroutineHeapMemory<CoroutineHeapSize>))
 	}
 }

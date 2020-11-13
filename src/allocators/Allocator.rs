@@ -6,7 +6,7 @@
 pub trait Allocator: Sized + Debug
 {
 	/// The sentinel value used for a zero-sized allocation.
-	const ZeroSizedAllocation: NonNull<u8> = non_null_pointer(usize::MAX as *mut u8);
+	const ZeroSizedAllocation: NonNull<u8> = new_non_null(usize::MAX as *mut u8);
 
 	/// Allocate memory.
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>;
@@ -113,7 +113,7 @@ pub trait Allocator: Sized + Debug
 			return Self::ZeroSizedAllocation.as_ptr()
 		}
 
-		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
+		let non_zero_size = new_non_zero_usize(zero_size);
 		match self.allocate(non_zero_size, layout.align().non_zero())
 		{
 			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
@@ -145,9 +145,9 @@ pub trait Allocator: Sized + Debug
 
 		let zero_size = layout.size();
 		debug_assert_ne!(zero_size, 0, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
-		let non_zero_size = NonZeroUsize::new_unchecked(zero_size);
+		let non_zero_size = new_non_zero_usize(zero_size);
 
-		let current_memory = NonNull::new_unchecked(ptr);
+		let current_memory = new_non_null(ptr);
 
 		self.deallocate(non_zero_size,layout.align().non_zero(), current_memory)
 	}
@@ -158,7 +158,7 @@ pub trait Allocator: Sized + Debug
 	{
 		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
 
-		match self.reallocate(NonNull::new_unchecked(ptr), layout, new_size)
+		match self.reallocate(new_non_null(ptr), layout, new_size)
 		{
 			Ok((memory_address, _actual_size)) => memory_address.as_ptr(),
 			Err(_) => null_mut(),
@@ -174,7 +174,7 @@ pub trait Allocator: Sized + Debug
 		{
 			return Ok(NonNull::slice_from_raw_parts(Self::ZeroSizedAllocation, 0))
 		}
-		let non_zero_size = unsafe { NonZeroUsize::new_unchecked(size) };
+		let non_zero_size = new_non_zero_usize(size);
 		
 		let (ptr, size) = self.allocate(non_zero_size, layout.align().non_zero())?;
 		
@@ -192,7 +192,7 @@ pub trait Allocator: Sized + Debug
 	
 		debug_assert_ne!(layout.size(), 0, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
 	
-		let non_zero_size = NonZeroUsize::new_unchecked(layout.size());
+		let non_zero_size = new_non_zero_usize(layout.size());
 		self.deallocate(non_zero_size, layout.align().non_zero(), ptr)
 	}
 	

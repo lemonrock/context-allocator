@@ -16,7 +16,7 @@ impl<CoroutineHeapSize: MemorySize> MemorySource for CoroutineHeapMemorySource<C
 	{
 		let size = size_of::<CoroutineHeapMemory<CoroutineHeapSize>>();
 		debug_assert_ne!(size, 0, "Unsized values are not supported");
-		unsafe { NonZeroUsize::new_unchecked(size) }
+		new_non_zero_usize(size)
 	}
 	
 	#[inline(always)]

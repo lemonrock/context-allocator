@@ -18,8 +18,7 @@ impl MemorySource for MemoryMapSource
 	fn size(&self) -> NonZeroUsize
 	{
 		let size = self.0.mapped_size_in_bytes();
-		debug_assert_ne!(size, 0, "MappedMemory that is unsized is unsupported");
-		unsafe { NonZeroUsize::new_unchecked(size) }
+		new_non_zero_usize(size)
 	}
 	
 	#[inline(always)]

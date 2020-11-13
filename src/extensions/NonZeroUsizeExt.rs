@@ -168,7 +168,7 @@ impl NonZeroUsizeExt for NonZeroUsize
 	#[inline(always)]
 	fn non_zero_unchecked(value: usize) -> Self
 	{
-		non_zero_usize(value)
+		new_non_zero_usize(value)
 	}
 
 	#[inline(always)]

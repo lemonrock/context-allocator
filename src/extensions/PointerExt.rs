@@ -40,7 +40,7 @@ impl<T> PointerExt<T> for *const T
 	#[inline(always)]
 	fn non_null(self) -> NonNull<T>
 	{
-		non_null_pointer(self as *mut T)
+		new_non_null(self as *mut T)
 	}
 
 	#[inline(always)]
@@ -75,7 +75,7 @@ impl<T> PointerExt<T> for *mut T
 	#[inline(always)]
 	fn non_null(self) -> NonNull<T>
 	{
-		non_null_pointer(self)
+		new_non_null(self)
 	}
 
 	#[inline(always)]
