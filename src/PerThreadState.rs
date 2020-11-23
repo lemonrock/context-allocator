@@ -9,7 +9,7 @@ pub struct PerThreadState<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator
 
 	coroutine_local_allocator: Option<CoroutineLocalAllocator>,
 
-	thread_local_allocator: Option<ThreadLocalAllocator>,
+	thread_local_allocator: Option<MemoryUsageTrackingThreadLocalAllocator<ThreadLocalAllocator>>,
 
 	marker: PhantomData<CoroutineHeapSize>,
 }

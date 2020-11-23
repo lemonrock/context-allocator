@@ -74,8 +74,8 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 		{
 			CoroutineLocal => self.coroutine_local_allocator().expect("Should have assigned a coroutine local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
 
-			ThreadLocal => self.thread_local_allocator().expect("Should have assigned a thread local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
-
+			ThreadLocal => self.thread_local_allocator().expect("Should have assigned a thread local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment)?,
+			
 			Global => self.global_allocator().allocate(non_zero_size, non_zero_power_of_two_alignment),
 		}
 	}
@@ -112,6 +112,12 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 	{
 		self.per_thread_state
 	}
+	
+	#[inline(always)]
+	fn global_allocator(&self) -> &Self::GlobalAllocator
+	{
+		&self.global_allocator
+	}
 }
 
 impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
@@ -128,32 +134,6 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 			per_thread_state,
 			marker: PhantomData
 		}
-	}
-	
-	#[inline(always)]
-	fn coroutine_local_allocator(&self) -> Option<&CoroutineLocalAllocator>
-	{
-		self.use_per_thread_state(|per_thread_state| match &per_thread_state.coroutine_local_allocator
-		{
-			&Some(ref x) => Some(unsafe { & * (x as *const CoroutineLocalAllocator) }),
-			&None => None,
-		})
-	}
-
-	#[inline(always)]
-	fn thread_local_allocator(&self) -> Option<&ThreadLocalAllocator>
-	{
-		self.use_per_thread_state(|per_thread_state| match &per_thread_state.thread_local_allocator
-		{
-			&Some(ref x) => Some(unsafe { & * (x as *const ThreadLocalAllocator) }),
-			&None => None,
-		})
-	}
-	
-	#[inline(always)]
-	fn global_allocator(&self) -> &GlobalAllocator
-	{
-		&self.global_allocator
 	}
 }
 

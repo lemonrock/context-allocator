@@ -19,3 +19,4 @@ pub mod bit_set;
 include!("Allocator.rs");
 include!("BumpAllocator.rs");
 include!("ContextAllocator.rs");
+include!("MemoryUsageTrackingThreadLocalAllocator.rs");

@@ -158,6 +158,7 @@ include!("GlobalThreadAndCoroutineSwitchableAllocator.rs");
 include!("GlobalThreadAndCoroutineSwitchableAllocatorInstance.rs");
 include!("LifetimeHint.rs");
 include!("LocalAllocator.rs");
+include!("LocalAllocatorMemoryUsage.rs");
 include!("MemoryAddress.rs");
 include!("MemoryRange.rs");
 include!("PerThreadState.rs");
