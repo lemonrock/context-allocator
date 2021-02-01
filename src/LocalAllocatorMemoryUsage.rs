@@ -5,7 +5,7 @@
 /// Local allocator memory usage.
 ///
 /// Only accurate when recorded.
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalAllocatorMemoryUsage
 {
 	allocated: Cell<u64>,
@@ -58,13 +58,13 @@ impl LocalAllocatorMemoryUsage
 	#[inline(always)]
 	fn growing_reallocated(&self, non_zero_current_size: NonZeroUsize, size: usize)
 	{
-		self.growing_reallocated.set(self.get_growing_reallocated() + (size - non_zero_current_size.get()));
+		self.growing_reallocated.set(self.get_growing_reallocated() + ((size - non_zero_current_size.get()) as u64));
 	}
 	
 	#[inline(always)]
 	fn shrinking_reallocated(&self, non_zero_current_size: NonZeroUsize, size: usize)
 	{
-		self.shrinking_reallocated.set(self.get_shrinking_reallocated() + (non_zero_current_size.get() - size));
+		self.shrinking_reallocated.set(self.get_shrinking_reallocated() + ((non_zero_current_size.get() - size) as u64));
 	}
 	
 	#[inline(always)]

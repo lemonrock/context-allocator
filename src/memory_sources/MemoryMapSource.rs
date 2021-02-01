@@ -32,8 +32,8 @@ impl MemoryMapSource
 {
 	/// New instance.
 	#[inline(always)]
-	pub fn new(size: NonZeroU64, settings: MappedMemorySettings, defaults: &DefaultPageSizeAndHugePageSizes) -> Result<Self, MemoryMapError>
+	pub fn new(size: NonZeroU64, settings: MappedMemorySettings) -> Result<Self, MemoryMapError>
 	{
-		settings.anonymous_memory_map(size, defaults).map(|mapped_memory| Self(mapped_memory))
+		settings.anonymous_memory_map(size).map(Self)
 	}
 }

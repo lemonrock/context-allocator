@@ -5,7 +5,7 @@
 /// Adapts an `Allocator` to the `GlobalAlloc` and `Alloc` traits.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct AllocatorAdaptor<'a, A: 'a + Allocator>(pub(crate) &'a A);
+pub struct AllocatorAdaptor<'a, A: 'a + Allocator + ?Sized>(pub(crate) &'a A);
 
 impl<'a, A: 'a + Allocator> Deref for AllocatorAdaptor<'a, A>
 {
@@ -18,17 +18,17 @@ impl<'a, A: 'a + Allocator> Deref for AllocatorAdaptor<'a, A>
 	}
 }
 
-unsafe impl<'a, A: 'a + Allocator> GlobalAlloc for AllocatorAdaptor<'a, A>
+unsafe impl<'a, A: 'a + Allocator + ?Sized> GlobalAlloc for AllocatorAdaptor<'a, A>
 {
 	global_alloc!();
 }
 
-unsafe impl<'a, A: 'a + Allocator> AllocRef for AllocatorAdaptor<'a, A>
+unsafe impl<'a, A: 'a + Allocator + ?Sized> AllocRef for AllocatorAdaptor<'a, A>
 {
 	alloc_ref!();
 }
 
-impl<'a, A: 'a + Allocator> Allocator for AllocatorAdaptor<'a, A>
+impl<'a, A: 'a + Allocator + ?Sized> Allocator for AllocatorAdaptor<'a, A>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>

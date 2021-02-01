@@ -29,7 +29,7 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemoryS
 	{
 		self.use_per_thread_state(|per_thread_state| match &per_thread_state.coroutine_local_allocator
 		{
-			&Some(ref x) => Some(unsafe { & * (x as *const CoroutineLocalAllocator) }),
+			&Some(ref x) => Some(unsafe { & * (x as *const Self::CoroutineLocalAllocator) }),
 			&None => None,
 		})
 	}
@@ -46,7 +46,6 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemoryS
 	}
 	
 	#[doc(hidden)]
-	#[inline(always)]
 	fn global_allocator(&self) -> &Self::GlobalAllocator;
 	
 	/// Swaps the coroutine local allocator.
