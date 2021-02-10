@@ -2,7 +2,7 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// A helper trait that brings together the core, common functionality required to implement the traits `GlobalAlloc` and `Alloc`.
+/// A helper trait that brings together the core, common functionality required to implement the Rust `std::alloc` traits `GlobalAlloc` and `Alloc`.
 pub trait Allocator: Debug
 {
 	/// The sentinel value used for a zero-sized allocation.
@@ -33,13 +33,6 @@ pub trait Allocator: Debug
 	fn adapt<'a>(&'a self) -> AllocatorAdaptor<'a, Self>
 	{
 		AllocatorAdaptor(self)
-	}
-
-	/// Adapts a reference to a `GlobalAlloc` and `Alloc` reference.
-	#[inline(always)]
-	fn adapt_reference<'a>(&'a self) -> &'a AllocatorAdaptor<'a, Self>
-	{
-		unsafe { transmute(self) }
 	}
 
 	#[doc(hidden)]
@@ -104,7 +97,7 @@ pub trait Allocator: Debug
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn GlobalAlloc_alloc(&self, layout: Layout) -> *mut u8
+	unsafe fn GlobalAlloc_allocate(&self, layout: Layout) -> *mut u8
 	{
 		let zero_size = layout.size();
 
@@ -123,7 +116,7 @@ pub trait Allocator: Debug
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn GlobalAlloc_alloc_zeroed(&self, layout: Layout) -> *mut u8
+	unsafe fn GlobalAlloc_allocate_zeroed(&self, layout: Layout) -> *mut u8
 	{
 		match self.allocate_zeroed(layout)
 		{
@@ -134,7 +127,7 @@ pub trait Allocator: Debug
 
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn GlobalAlloc_dealloc(&self, ptr: *mut u8, layout: Layout)
+	unsafe fn GlobalAlloc_deallocate(&self, ptr: *mut u8, layout: Layout)
 	{
 		debug_assert_ne!(ptr, null_mut(), "ptr should never be null");
 
@@ -167,7 +160,7 @@ pub trait Allocator: Debug
 
 	#[doc(hidden)]
 	#[inline(always)]
-	fn AllocRef_alloc(&self, layout: Layout)-> Result<NonNull<[u8]>, AllocError>
+	fn Alloc_allocate(&self, layout: Layout)-> Result<NonNull<[u8]>, AllocError>
 	{
 		let size = layout.size();
 		if unlikely!(size == 0)
@@ -183,7 +176,7 @@ pub trait Allocator: Debug
 	
 	#[doc(hidden)]
 	#[inline(always)]
-	unsafe fn AllocRef_dealloc(&self, ptr: NonNull<u8>, layout: Layout)
+	unsafe fn Alloc_deallocate(&self, ptr: NonNull<u8>, layout: Layout)
 	{
 		if unlikely!(ptr == Self::ZeroSizedAllocation)
 		{
@@ -198,7 +191,7 @@ pub trait Allocator: Debug
 	
 	#[doc(hidden)]
 	#[inline(always)]
-	fn AllocRef_grow(&self, ptr: NonNull<u8>, current_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
+	fn Alloc_grow(&self, ptr: NonNull<u8>, current_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 	{
 		let current_memory = ptr;
 		
@@ -209,7 +202,7 @@ pub trait Allocator: Debug
 		if unlikely!(current_size == 0)
 		{
 			debug_assert_eq!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was not the sentinel `Allocator::ZeroSizedAllocation`");
-			return self.AllocRef_alloc(new_layout)
+			return self.Alloc_allocate(new_layout)
 		}
 		debug_assert_ne!(current_memory, Self::ZeroSizedAllocation, "It should not be possible for a `layout.size()` to be zero if the `ptr` was the sentinel `Allocator::ZeroSizedAllocation`");
 		
@@ -225,7 +218,7 @@ pub trait Allocator: Debug
 	
 	#[doc(hidden)]
 	#[inline(always)]
-	fn AllocRef_shrink(&self, ptr: NonNull<u8>, current_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
+	fn Alloc_shrink(&self, ptr: NonNull<u8>, current_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 	{
 		let current_memory = ptr;
 		

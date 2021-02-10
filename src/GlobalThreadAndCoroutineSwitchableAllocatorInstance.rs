@@ -32,9 +32,9 @@ unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocat
 	global_alloc!();
 }
 
-unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> AllocRef for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
+unsafe impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>, ThreadLocalAllocator: LocalAllocator<MemoryMapSource>, GlobalAllocator: Allocator> Alloc for GlobalThreadAndCoroutineSwitchableAllocatorInstance<CoroutineHeapSize, CoroutineLocalAllocator, ThreadLocalAllocator, GlobalAllocator>
 {
-	alloc_ref!();
+	alloc!();
 }
 
 macro_rules! choose_allocator
@@ -74,7 +74,7 @@ impl<CoroutineHeapSize: MemorySize, CoroutineLocalAllocator: LocalAllocator<Coro
 		{
 			CoroutineLocal => self.coroutine_local_allocator().expect("Should have assigned a coroutine local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
 
-			ThreadLocal => self.thread_local_allocator().expect("Should have assigned a thread local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment)?,
+			ThreadLocal => self.thread_local_allocator().expect("Should have assigned a thread local allocator").allocate(non_zero_size, non_zero_power_of_two_alignment),
 			
 			Global => self.global_allocator().allocate(non_zero_size, non_zero_power_of_two_alignment),
 		}

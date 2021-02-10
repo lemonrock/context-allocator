@@ -4,32 +4,32 @@
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! alloc_ref
+macro_rules! alloc
 {
 	() =>
 	{
 		#[inline(always)]
-		fn alloc(&self, layout: Layout)-> Result<NonNull<[u8]>, AllocError>
+		fn allocate(&self, layout: Layout)-> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_alloc(layout)
+			self.Alloc_allocate(layout)
 		}
 		
 		#[inline(always)]
-		unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout)
+		unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout)
 		{
-			self.AllocRef_dealloc(ptr, layout)
+			self.Alloc_deallocate(ptr, layout)
 		}
 		
 		#[inline(always)]
 		unsafe fn grow(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_grow(ptr, old_layout, new_layout)
+			self.Alloc_grow(ptr, old_layout, new_layout)
 		}
 
 		#[inline(always)]
 		unsafe fn shrink(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 		{
-			self.AllocRef_shrink(ptr, old_layout, new_layout)
+			self.Alloc_shrink(ptr, old_layout, new_layout)
 		}
 	}
 }

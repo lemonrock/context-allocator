@@ -5,22 +5,24 @@
 /// A trait that all such allocators implement.
 ///
 /// Create a new instance using `GlobalThreadAndCoroutineSwitchableAllocatorInstance`.
-pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + Allocator + Debug + AllocRef
+pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemorySize>: RefUnwindSafe + Sync + GlobalAlloc + Allocator + Debug + Alloc
 {
 	/// Type of the coroutine local allocator.
 	type CoroutineLocalAllocator: LocalAllocator<CoroutineHeapMemorySource<CoroutineHeapSize>>;
 
-	/// Type of the thread local allocator.
+	/// Type of the thread-local allocator.
 	type ThreadLocalAllocator: LocalAllocator<MemoryMapSource>;
 
 	/// Type of the global allocator.
 	type GlobalAllocator: Allocator;
 	
 	/// Thread-local allocator memory usage.
+	///
+	/// Panics if the thread-local allocator has not been initialized.
 	#[inline(always)]
-	fn thread_local_allocator_memory_usage(&self) -> Option<&LocalAllocatorMemoryUsage>
+	fn thread_local_allocator_memory_usage<R, LAMUU: FnOnce(&LocalAllocatorMemoryUsage) -> R>(&self, local_allocator_message_usage_user: LAMUU) -> R
 	{
-		self.thread_local_allocator().map(|thread_local_allocator| thread_local_allocator.memory_usage())
+		local_allocator_message_usage_user(self.thread_local_allocator().expect("Thread local allocator needs to have been initialized").memory_usage())
 	}
 	
 	#[doc(hidden)]
@@ -59,27 +61,27 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemoryS
 		self.use_per_thread_state(|per_thread_state| replace(&mut per_thread_state.coroutine_local_allocator, replacement))
 	}
 
-	/// Initializes the thread local allocator.
+	/// Initializes the thread-local allocator.
 	#[inline(always)]
 	fn initialize_thread_local_allocator(&self, thread_local_allocator: Self::ThreadLocalAllocator)
 	{
 		self.use_per_thread_state(|per_thread_state|
 		{
-			debug_assert!(per_thread_state.thread_local_allocator.is_none(), "Already initialized thread local allocator");
+			debug_assert!(per_thread_state.thread_local_allocator.is_none(), "Already initialized thread-local allocator");
 			
 			per_thread_state.thread_local_allocator = Some(MemoryUsageTrackingThreadLocalAllocator::new(thread_local_allocator))
 		})
 	}
 
-	/// Drops the thread local allocator.
+	/// Drops the thread-local allocator.
 	///
-	/// Panics in debug if no thread local allocator has been initialized with `initialize_thread_local_allocator()`.
+	/// Panics in debug if no thread-local allocator has been initialized with `initialize_thread_local_allocator()`.
 	#[inline(always)]
 	fn drop_thread_local_allocator(&self)
 	{
 		self.use_per_thread_state(|per_thread_state|
 		{
-			debug_assert!(per_thread_state.thread_local_allocator.is_some(), "Already deinitialized thread local allocator");
+			debug_assert!(per_thread_state.thread_local_allocator.is_some(), "Already deinitialized thread-local allocator");
 			
 			per_thread_state.thread_local_allocator = None
 		})
@@ -119,12 +121,15 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemoryS
 		self.use_per_thread_state(|per_thread_state| per_thread_state.current_allocator_in_use = restore_to)
 	}
 	
+	/// Callback with the thread-local allocator, detailing changes in memory usage.
+	/// 
+	/// Panics if the thread-local allocator has not been initialized.
 	#[inline(always)]
-	fn callback_with_thread_local_allocator_detailing_memory_usage<F: FnOnce() -> R + UnwindSafe, R>(&self, our_usage: &Cell<u64>, callback: F)
+	fn callback_with_thread_local_allocator_detailing_memory_usage<F: FnOnce() -> R + UnwindSafe, R>(&self, our_usage: &Cell<u64>, callback: F) -> R
 	{
-		let thread_local_allocator_memory_usage_before = self.thread_local_allocator_memory_usage().expect("Thread local allocator needs to have been initialized").usage();
+		let thread_local_allocator_memory_usage_before = self.thread_local_allocator_memory_usage(LocalAllocatorMemoryUsage::usage);
 		let result = self.callback_with_thread_local_allocator(callback);
-		let thread_local_allocator_memory_usage_after = self.thread_local_allocator_memory_usage().unwrap().usage();
+		let thread_local_allocator_memory_usage_after = self.thread_local_allocator_memory_usage(LocalAllocatorMemoryUsage::usage);
 		
 		let was_our_usage = our_usage.get();
 		our_usage.set
@@ -137,10 +142,12 @@ pub trait GlobalThreadAndCoroutineSwitchableAllocator<CoroutineHeapSize: MemoryS
 			{
 				was_our_usage - (thread_local_allocator_memory_usage_before - thread_local_allocator_memory_usage_after)
 			}
-		)
+		);
+		
+		result
 	}
 	
-	/// Switch the current allocator in use to thread local and execute the callback; restore it after calling the callback unless a panic occurs.
+	/// Switch the current allocator in use to thread-local and execute the callback; restore it after calling the callback unless a panic occurs.
 	#[inline(always)]
 	fn callback_with_thread_local_allocator<F: FnOnce() -> R + UnwindSafe, R>(&self, callback: F) -> R
 	{

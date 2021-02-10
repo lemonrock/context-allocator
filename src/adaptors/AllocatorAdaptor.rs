@@ -23,9 +23,9 @@ unsafe impl<'a, A: 'a + Allocator + ?Sized> GlobalAlloc for AllocatorAdaptor<'a,
 	global_alloc!();
 }
 
-unsafe impl<'a, A: 'a + Allocator + ?Sized> AllocRef for AllocatorAdaptor<'a, A>
+unsafe impl<'a, A: 'a + Allocator + ?Sized> Alloc for AllocatorAdaptor<'a, A>
 {
-	alloc_ref!();
+	alloc!();
 }
 
 impl<'a, A: 'a + Allocator + ?Sized> Allocator for AllocatorAdaptor<'a, A>

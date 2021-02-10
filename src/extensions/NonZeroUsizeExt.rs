@@ -38,17 +38,10 @@ pub trait NonZeroUsizeExt: Sized + Copy + Ord + Debug
 	#[inline(always)]
 	fn divide_power_of_two_by_power_of_two(self, divisor: NonZeroUsize) -> usize
 	{
-		debug_assert!(self.is_power_of_two(), "self `{:?}` is not a power of two", self);
+		debug_assert!(self.to_usize().is_power_of_two(), "self `{:?}` is not a power of two", self);
 		debug_assert!(divisor.is_power_of_two(), "divisor `{:?}` is not a power of two", divisor);
 
 		self.to_usize() >> divisor.logarithm_base2()
-	}
-
-	/// Is power of two.
-	#[inline(always)]
-	fn is_power_of_two(self) -> bool
-	{
-		self.to_usize().is_power_of_two()
 	}
 
 	/// Logarithm base two.

@@ -2,10 +2,10 @@
 // Copyright © 2019 The developers of context-allocator. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/lemonrock/context-allocator/master/COPYRIGHT.
 
 
-/// Adapts implementations of `AllocRef` to `Allocator`.
-pub struct AllocRefToAllocatorAdaptor<A: AllocRef>(UnsafeCell<A>);
+/// Adapts implementations of `std::alloc::Allocator` (renamed to `Alloc` to avoid a namespace clash and match `GlobalAlloc`) to `Allocator`.
+pub struct AllocToAllocatorAdaptor<A: Alloc>(UnsafeCell<A>);
 
-impl<A: AllocRef> Debug for AllocRefToAllocatorAdaptor<A>
+impl<A: Alloc> Debug for AllocToAllocatorAdaptor<A>
 {
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result
 	{
@@ -13,7 +13,7 @@ impl<A: AllocRef> Debug for AllocRefToAllocatorAdaptor<A>
 	}
 }
 
-impl<A: AllocRef> Deref for AllocRefToAllocatorAdaptor<A>
+impl<A: Alloc> Deref for AllocToAllocatorAdaptor<A>
 {
 	type Target = A;
 
@@ -24,18 +24,18 @@ impl<A: AllocRef> Deref for AllocRefToAllocatorAdaptor<A>
 	}
 }
 
-impl<A: AllocRef> Allocator for AllocRefToAllocatorAdaptor<A>
+impl<A: Alloc> Allocator for AllocToAllocatorAdaptor<A>
 {
 	#[inline(always)]
 	fn allocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize) -> Result<(NonNull<u8>, usize), AllocError>
 	{
-		Self::map_non_null_slice(self.reference().alloc(Self::layout(non_zero_size, non_zero_power_of_two_alignment)))
+		Self::map_non_null_slice(self.reference().allocate(Self::layout(non_zero_size, non_zero_power_of_two_alignment)))
 	}
 
 	#[inline(always)]
 	fn deallocate(&self, non_zero_size: NonZeroUsize, non_zero_power_of_two_alignment: NonZeroUsize, current_memory: NonNull<u8>)
 	{
-		unsafe { self.reference().dealloc(current_memory, Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
+		unsafe { self.reference().deallocate(current_memory, Self::layout(non_zero_size, non_zero_power_of_two_alignment)) }
 	}
 
 	#[inline(always)]
@@ -51,7 +51,7 @@ impl<A: AllocRef> Allocator for AllocRefToAllocatorAdaptor<A>
 	}
 }
 
-impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
+impl<A: Alloc> AllocToAllocatorAdaptor<A>
 {
 	/// New instance.
 	#[inline(always)]
@@ -79,7 +79,7 @@ impl<A: AllocRef> AllocRefToAllocatorAdaptor<A>
 	}
 }
 
-impl AllocRefToAllocatorAdaptor<System>
+impl AllocToAllocatorAdaptor<System>
 {
 	/// System malloc.
 	pub const System: Self = Self::new(System);

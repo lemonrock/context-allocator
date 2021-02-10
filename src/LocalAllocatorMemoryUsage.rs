@@ -5,7 +5,7 @@
 /// Local allocator memory usage.
 ///
 /// Only accurate when recorded.
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalAllocatorMemoryUsage
 {
 	allocated: Cell<u64>,
@@ -15,6 +15,15 @@ pub struct LocalAllocatorMemoryUsage
 	growing_reallocated: Cell<u64>,
 	
 	shrinking_reallocated: Cell<u64>,
+}
+
+impl Default for LocalAllocatorMemoryUsage
+{
+	#[inline(always)]
+	fn default() -> Self
+	{
+		Self::new()
+	}
 }
 
 impl Sub for LocalAllocatorMemoryUsage
@@ -36,6 +45,21 @@ impl Sub for LocalAllocatorMemoryUsage
 
 impl LocalAllocatorMemoryUsage
 {
+	/// New instance.
+	pub const fn new() -> Self
+	{
+		Self
+		{
+			allocated: Cell::new(0),
+			
+			deallocated: Cell::new(0),
+			
+			growing_reallocated: Cell::new(0),
+			
+			shrinking_reallocated: Cell::new(0),
+		}
+	}
+	
 	/// Memory usage.
 	#[inline(always)]
 	pub fn usage(&self) -> u64

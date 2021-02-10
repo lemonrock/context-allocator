@@ -11,19 +11,19 @@ macro_rules! global_alloc
 		#[inline(always)]
 		unsafe fn alloc(&self, layout: Layout) -> *mut u8
 		{
-			self.GlobalAlloc_alloc(layout)
+			self.GlobalAlloc_allocate(layout)
 		}
 
 		#[inline(always)]
 		unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8
 		{
-			self.GlobalAlloc_alloc_zeroed(layout)
+			self.GlobalAlloc_allocate_zeroed(layout)
 		}
 
 		#[inline(always)]
 		unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout)
 		{
-			self.GlobalAlloc_dealloc(ptr, layout)
+			self.GlobalAlloc_deallocate(ptr, layout)
 		}
 
 		#[inline(always)]

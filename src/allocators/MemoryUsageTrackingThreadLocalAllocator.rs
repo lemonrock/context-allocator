@@ -55,7 +55,11 @@ impl<LA: LocalAllocator<MemoryMapSource>> LocalAllocator<MemoryMapSource> for Me
 	#[inline(always)]
 	fn new_local_allocator(memory_source: MemoryMapSource, lifetime_hint: LifetimeHint, block_size_hint: NonZeroUsize) -> Self
 	{
-		LA::new_local_allocator(memory_source, lifetime_hint, block_size_hint)
+		Self
+		{
+			local_allocator: LA::new_local_allocator(memory_source, lifetime_hint, block_size_hint),
+			local_allocator_memory_usage: Default::default()
+		}
 	}
 	
 	#[inline(always)]
@@ -74,7 +78,7 @@ impl<LA: LocalAllocator<MemoryMapSource>> MemoryUsageTrackingThreadLocalAllocato
 		Self
 		{
 			local_allocator,
-			local_allocator_memory_usage: LocalAllocatorMemoryUsage::default(),
+			local_allocator_memory_usage: LocalAllocatorMemoryUsage::new(),
 		}
 	}
 	

@@ -5,10 +5,10 @@
 use super::*;
 
 
-include!("alloc_ref.rs");
+include!("alloc.rs");
 include!("global_alloc.rs");
 
 
 include!("AllocatorAdaptor.rs");
-include!("AllocRefToAllocatorAdaptor.rs");
+include!("AllocToAllocatorAdaptor.rs");
 include!("GlobalAllocToAllocatorAdaptor.rs");

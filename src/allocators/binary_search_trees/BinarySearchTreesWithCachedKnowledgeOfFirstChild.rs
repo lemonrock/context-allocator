@@ -142,7 +142,7 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	#[inline(always)]
 	pub(crate) fn smallest_power_of_two_difference(difference: usize) -> NonZeroUsize
 	{
-		debug_assert!(Self::size_is_greater_than_minimum_allocation_size(difference), "difference `{}` is too small to be a block");
+		debug_assert!(Self::size_is_greater_than_minimum_allocation_size(difference), "difference `{}` is too small to be a block", difference);
 
 		(1 << difference.trailing_zeros()).non_zero()
 	}
@@ -151,7 +151,7 @@ impl BinarySearchTreesWithCachedKnowledgeOfFirstChild
 	#[inline(always)]
 	pub(crate) fn largest_power_of_two_difference(difference: usize) -> NonZeroUsize
 	{
-		debug_assert!(Self::size_is_greater_than_minimum_allocation_size(difference), "difference `{}` is too small to be a block");
+		debug_assert!(Self::size_is_greater_than_minimum_allocation_size(difference), "difference `{}` is too small to be a block", difference);
 
 		const BitsInAByte: usize = 8;
 		const BitsInAnUsize: usize = size_of::<usize>() * BitsInAByte;

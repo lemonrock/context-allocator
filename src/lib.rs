@@ -14,6 +14,7 @@
 #![feature(core_intrinsics)]
 #![feature(extern_types)]
 #![feature(nonnull_slice_from_raw_parts)]
+#![feature(nonzero_is_power_of_two)]
 #![feature(slice_ptr_get)]
 #![feature(slice_ptr_len)]
 #![feature(thread_local)]
@@ -87,7 +88,7 @@ use either::*;
 use likely::*;
 use linux_support::memory::mapping::*;
 use magic_ring_buffer::memory_sizes::MemorySize;
-use std::alloc::AllocRef;
+use std::alloc::Allocator as Alloc;
 use std::alloc::AllocError;
 use std::alloc::Layout;
 use std::alloc::GlobalAlloc;
