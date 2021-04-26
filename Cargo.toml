@@ -21,7 +21,7 @@ version = "0.3.1"
 [dependencies]
 static_assertions = "^1.1"
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(all(target_os = "linux", target_pointer_width = "64"))'.dependencies]
 either = { version = "^1.5.3", features = ["serde"] }
 errno = "^0.2"
 libc = { version = "^0.2.93", features = ["const-extern-fn", "extra_traits", "std"] }
